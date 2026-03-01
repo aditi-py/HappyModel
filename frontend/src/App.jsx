@@ -270,7 +270,7 @@ function Badge({ children, color = '#6366f1', bg }) {
   );
 }
 
-function Tooltip({ text, dark }) {
+function HelpTip({ text, dark }) {
   const [show, setShow] = useState(false);
   const t = tok(dark);
   return (
@@ -878,7 +878,7 @@ function ParamSlider({ label, pkey, min, max, step = 1, value, onChange, tooltip
     <div style={{ marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
         <label style={{ fontSize: 13, fontWeight: 600, color: t.text }}>{label}</label>
-        {tooltip && <Tooltip text={tooltip} dark={dark} />}
+        {tooltip && <HelpTip text={tooltip} dark={dark} />}
         <span style={{ marginLeft: 'auto', fontFamily: 'DM Mono, monospace', fontSize: 13, color: t.accent, fontWeight: 600 }}>{value}</span>
       </div>
       <input type="range" min={min} max={max} step={step} value={value}
@@ -897,7 +897,7 @@ function ParamSelect({ label, pkey, options, value, onChange, tooltip, dark }) {
     <div style={{ marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
         <label style={{ fontSize: 13, fontWeight: 600, color: t.text }}>{label}</label>
-        {tooltip && <Tooltip text={tooltip} dark={dark} />}
+        {tooltip && <HelpTip text={tooltip} dark={dark} />}
       </div>
       <select value={value} onChange={e => onChange(pkey, e.target.value)} style={{
         width: '100%', padding: '8px 10px', borderRadius: 8,
@@ -928,7 +928,7 @@ function ParamToggle({ label, pkey, value, onChange, tooltip, dark }) {
         </div>
         <span style={{ fontSize: 13, fontWeight: 600, color: t.text }}>{label}</span>
       </label>
-      {tooltip && <Tooltip text={tooltip} dark={dark} />}
+      {tooltip && <HelpTip text={tooltip} dark={dark} />}
     </div>
   );
 }
@@ -1140,7 +1140,7 @@ function StepParams({ state, dispatch }) {
       <Card dark={dark}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
           <h3 style={{ fontSize: 15, fontWeight: 600, color: t.text }}>Train / Test Split</h3>
-          <Tooltip text="Fraction of data reserved for testing model performance." dark={dark} />
+          <HelpTip text="Fraction of data reserved for testing model performance." dark={dark} />
         </div>
         <ParamSlider
           label={`Test Size: ${Math.round(split.testSize * 100)}%`}
@@ -1232,7 +1232,7 @@ function MetricCard({ mkey, value, dark }) {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
         <p style={{ fontSize: 12, fontWeight: 600, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{info.label}</p>
-        <Tooltip text={info.desc} dark={dark} />
+        <HelpTip text={info.desc} dark={dark} />
       </div>
       <p style={{ fontFamily: 'DM Mono, monospace', fontSize: 28, fontWeight: 700, color }}>{display}{info.unit}</p>
     </div>
