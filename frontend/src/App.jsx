@@ -302,26 +302,29 @@ function CyberpunkBackground() {
     const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
     resize();
     window.addEventListener('resize', resize);
-    const chars = 'アイウエオカキクケコサシスセソ0123456789ABCDEF><=/\\|#$%@!?'.split('');
-    const cols = Math.floor(canvas.width / 22);
-    const drops = Array(cols).fill(0).map(() => Math.random() * -50);
-    let animId;
-    const draw = () => {
-      ctx.fillStyle = 'rgba(6,6,17,0.06)';
+    const chars = 'アイウエオカキクケコ0123456789ABCDEF'.split('');
+    const cols = Math.floor(canvas.width / 28);
+    const drops = Array(cols).fill(0).map(() => Math.random() * -80);
+    let animId, last = 0;
+    const FPS = 12; // slow, ambient pace
+    const draw = (ts) => {
+      animId = requestAnimationFrame(draw);
+      if (ts - last < 1000 / FPS) return;
+      last = ts;
+      ctx.fillStyle = 'rgba(6,6,17,0.12)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       drops.forEach((y, i) => {
-        const bright = Math.random() > 0.92;
-        ctx.fillStyle = bright ? '#ffffff' : (Math.random() > 0.5 ? '#00ffd5' : '#00aa88');
-        ctx.font = `${bright ? 'bold ' : ''}13px "Share Tech Mono", monospace`;
-        ctx.globalAlpha = bright ? 0.9 : 0.18 + Math.random() * 0.12;
-        ctx.fillText(chars[Math.floor(Math.random() * chars.length)], i * 22, y * 22);
+        const bright = Math.random() > 0.96;
+        ctx.fillStyle = bright ? '#c0fff5' : '#00ffd5';
+        ctx.font = `12px "Share Tech Mono", monospace`;
+        ctx.globalAlpha = bright ? 0.5 : 0.1 + Math.random() * 0.08;
+        ctx.fillText(chars[Math.floor(Math.random() * chars.length)], i * 28, y * 20);
         ctx.globalAlpha = 1;
-        if (y * 22 > canvas.height && Math.random() > 0.975) drops[i] = 0;
-        drops[i] += 0.5;
+        if (y * 20 > canvas.height && Math.random() > 0.97) drops[i] = 0;
+        drops[i] += 0.4;
       });
-      animId = requestAnimationFrame(draw);
     };
-    draw();
+    animId = requestAnimationFrame(draw);
     return () => { window.removeEventListener('resize', resize); cancelAnimationFrame(animId); };
   }, []);
   return <canvas ref={canvasRef} style={{ position: 'fixed', top: 0, left: 0, zIndex: 0, pointerEvents: 'none' }} />;
@@ -391,23 +394,26 @@ function Badge({ children, color = '#00ffd5', bg }) {
 
 function HelpTip({ text, dark }) {
   const [show, setShow] = useState(false);
-  const t = tok(dark);
   return (
     <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
       onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
       <span style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         width: 16, height: 16, borderRadius: '50%',
-        background: t.border, color: t.muted,
+        background: '#00ffd515', color: '#00ffd5',
+        border: '1px solid #00ffd544',
         fontSize: 10, cursor: 'help', fontWeight: 700, userSelect: 'none',
+        textShadow: '0 0 4px #00ffd5',
       }}>?</span>
       {show && (
         <div style={{
-          position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: dark ? '#0f172a' : '#1e293b', color: '#f1f5f9',
-          borderRadius: 6, padding: '6px 10px', fontSize: 12, lineHeight: 1.5,
-          width: 200, zIndex: 100, boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-          pointerEvents: 'none',
+          position: 'absolute', bottom: 22, left: '50%', transform: 'translateX(-50%)',
+          background: '#0a0a1a', color: '#c0c8ff',
+          border: '1px solid #00ffd533',
+          borderRadius: 4, padding: '8px 12px', fontSize: 12, lineHeight: 1.6,
+          width: 220, zIndex: 9000,
+          boxShadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 12px rgba(0,255,213,0.15)',
+          pointerEvents: 'none', whiteSpace: 'normal',
         }}>
           {text}
         </div>
@@ -1224,8 +1230,8 @@ function StepParams({ state, dispatch }) {
       const body = {
         file_id:         data.fileId,
         model_type:      model.id,
-        feature_columns: state.features.inputs,
-        target_column:   state.features.target,
+        feature_columns: features.inputs,
+        target_column:   features.target,
         params,
         test_size:   split.testSize,
         cv_folds:    split.useCv ? split.cvFolds : null,
@@ -1404,7 +1410,7 @@ function ConfusionMatrix({ matrix, dark }) {
 }
 
 function StepResults({ state, dispatch }) {
-  const { results, model, ui } = state;
+  const { results, model, ui, data, features } = state;
   const dark = ui.darkMode;
   const t = tok(dark);
   const toast = useToast();
@@ -1450,20 +1456,127 @@ function StepResults({ state, dispatch }) {
   };
 
   const exportReport = () => {
-    const m = current.metrics || {};
-    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>HappyModel Report – ${current.modelName}</title>
-<style>body{font-family:system-ui,sans-serif;background:#f8fafc;color:#0f172a;padding:40px;max-width:900px;margin:auto}
-h1{color:#6366f1;border-bottom:2px solid #6366f1;padding-bottom:12px}
-.card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin:16px 0;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.metric{display:inline-block;margin:8px;padding:12px 20px;border-radius:8px;background:#f1f5f9;text-align:center;min-width:120px}
-.metric b{display:block;font-size:24px;color:#6366f1;font-family:monospace}
-table{width:100%;border-collapse:collapse}td,th{padding:8px 12px;text-align:left;border-bottom:1px solid #e2e8f0}th{font-weight:600;background:#f8fafc}
+    const m   = current.metrics || {};
+    const fi  = current.feature_importances || [];
+    const avp = current.actual_vs_predicted || [];
+    const res = current.residuals || [];
+    const cm  = current.confusion_matrix || null;
+    const roc = current.roc_curve || [];
+    const pca = current.pca_2d || [];
+
+    const fiRows = fi.slice(0, 20).map(({feature, importance}) =>
+      `<tr><td>${feature}</td><td>${typeof importance === 'number' ? importance.toFixed(6) : importance}</td></tr>`).join('');
+
+    const avpRows = avp.slice(0, 50).map(({actual, predicted}) =>
+      `<tr><td>${typeof actual==='number'?actual.toFixed(4):actual}</td><td>${typeof predicted==='number'?predicted.toFixed(4):predicted}</td></tr>`).join('');
+
+    const resRows = res.slice(0, 50).map((v, i) =>
+      `<tr><td>${i+1}</td><td>${typeof v==='number'?v.toFixed(6):v}</td></tr>`).join('');
+
+    const rocRows = roc.slice(0, 20).map(({fpr, tpr}) =>
+      `<tr><td>${typeof fpr==='number'?fpr.toFixed(4):fpr}</td><td>${typeof tpr==='number'?tpr.toFixed(4):tpr}</td></tr>`).join('');
+
+    const cmHtml = cm ? `
+      <div class="card" id="confmat">
+        <h3>Confusion Matrix</h3>
+        <table style="width:auto">
+          ${cm.map(row=>`<tr>${row.map(v=>`<td style="text-align:center;min-width:48px;font-weight:700">${v}</td>`).join('')}</tr>`).join('')}
+        </table>
+      </div>` : '';
+
+    const pcaRows = pca.slice(0, 50).map(({x, y, cluster}) =>
+      `<tr><td>${typeof x==='number'?x.toFixed(4):x}</td><td>${typeof y==='number'?y.toFixed(4):y}</td><td>${cluster ?? '—'}</td></tr>`).join('');
+
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>HappyModel Report – ${current.modelName}</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#f8fafc;color:#0f172a;padding:40px;max-width:960px;margin:auto;line-height:1.6}
+  h1{color:#00a896;border-bottom:2px solid #00a896;padding-bottom:12px;font-size:28px;margin-bottom:4px}
+  h2{color:#0f172a;font-size:20px;margin:0 0 12px}
+  h3{color:#334155;font-size:16px;margin:0 0 10px}
+  .subtitle{color:#64748b;font-size:13px;margin-bottom:32px}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:24px;margin:20px 0;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;font-size:13px}
+  .meta-grid span{color:#64748b}
+  .metric{display:inline-block;margin:6px;padding:14px 20px;border-radius:8px;background:#f1f5f9;text-align:center;min-width:130px;border-top:3px solid #00a896}
+  .metric small{display:block;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+  .metric b{display:block;font-size:22px;color:#00a896;font-family:monospace}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td,th{padding:8px 12px;text-align:left;border-bottom:1px solid #e2e8f0}
+  th{font-weight:600;background:#f8fafc;color:#475569}
+  .appendix-label{font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+  .note{font-size:12px;color:#94a3b8;margin-top:6px}
+  @media print{.card{break-inside:avoid}}
 </style></head><body>
 <h1>HappyModel Report</h1>
-<div class="card"><h2>${current.modelName}</h2><p>Generated: ${new Date(current.timestamp).toLocaleString()}</p></div>
-<div class="card"><h2>Metrics</h2>${Object.entries(m).map(([k,v])=>`<div class="metric"><small>${k.toUpperCase()}</small><b>${typeof v==='number'?v.toFixed(4):v}</b></div>`).join('')}</div>
-<div class="card"><h2>Parameters</h2><table>${Object.entries(current.params||{}).map(([k,v])=>`<tr><td>${k}</td><td><b>${v}</b></td></tr>`).join('')}</table></div>
+<p class="subtitle">Generated by HappyModel · ${new Date(current.timestamp).toLocaleString()}</p>
+
+<div class="card">
+  <h2>Overview</h2>
+  <div class="meta-grid">
+    <div><span>Dataset</span><br/><strong>${data.fileName || '—'}</strong></div>
+    <div><span>Model</span><br/><strong>${current.modelName}</strong></div>
+    <div><span>Task Type</span><br/><strong>${(current.task_type||'').replace('_',' ')}</strong></div>
+    <div><span>Training Time</span><br/><strong>${current.training_time != null ? Number(current.training_time).toFixed(2)+'s' : '—'}</strong></div>
+    <div><span>Dataset Shape</span><br/><strong>${data.shape?.rows?.toLocaleString() || '—'} rows × ${data.shape?.cols || '—'} cols</strong></div>
+    <div><span>Features Used</span><br/><strong>${features.inputs.length} columns</strong></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Performance Metrics</h2>
+  ${Object.entries(m).map(([k,v])=>`<div class="metric"><small>${k.toUpperCase()}</small><b>${typeof v==='number'?v.toFixed(4):v}</b></div>`).join('')}
+</div>
+
+<div class="card">
+  <h2>Hyperparameters</h2>
+  <table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+  ${Object.entries(current.params||{}).map(([k,v])=>`<tr><td>${k}</td><td><b>${v}</b></td></tr>`).join('')}
+  </tbody></table>
+</div>
+
+<div class="card">
+  <h2>Feature Configuration</h2>
+  <p><strong>Target column:</strong> ${features.target || '—'}</p>
+  <p style="margin-top:8px"><strong>Input features (${features.inputs.length}):</strong></p>
+  <p style="color:#475569;font-size:13px;margin-top:4px">${features.inputs.join(', ') || '—'}</p>
+</div>
+
+<h2 style="margin-top:40px;padding-top:16px;border-top:2px solid #e2e8f0">Appendix — Full Data</h2>
+
+${fi.length > 0 ? `<div class="card">
+  <h3>A1 · Feature Importances (top 20)</h3>
+  <table><thead><tr><th>Feature</th><th>Importance</th></tr></thead><tbody>${fiRows}</tbody></table>
+  <p class="note">Showing top 20 of ${fi.length} features.</p>
+</div>` : ''}
+
+${avp.length > 0 ? `<div class="card">
+  <h3>A2 · Actual vs Predicted (first 50 rows)</h3>
+  <table><thead><tr><th>Actual</th><th>Predicted</th></tr></thead><tbody>${avpRows}</tbody></table>
+  <p class="note">Showing first 50 of ${avp.length} test samples.</p>
+</div>` : ''}
+
+${res.length > 0 ? `<div class="card">
+  <h3>A3 · Residuals (first 50 rows)</h3>
+  <table><thead><tr><th>#</th><th>Residual (Actual − Predicted)</th></tr></thead><tbody>${resRows}</tbody></table>
+  <p class="note">Showing first 50 of ${res.length} residuals.</p>
+</div>` : ''}
+
+${cmHtml}
+
+${roc.length > 0 ? `<div class="card">
+  <h3>A5 · ROC Curve Data (sample)</h3>
+  <table><thead><tr><th>FPR</th><th>TPR</th></tr></thead><tbody>${rocRows}</tbody></table>
+  <p class="note">Showing 20 evenly-spaced points of ${roc.length} total.</p>
+</div>` : ''}
+
+${pca.length > 0 ? `<div class="card">
+  <h3>A6 · PCA 2D Cluster Data (first 50 points)</h3>
+  <table><thead><tr><th>PC1</th><th>PC2</th><th>Cluster</th></tr></thead><tbody>${pcaRows}</tbody></table>
+</div>` : ''}
+
 </body></html>`;
+
     const blob = new Blob([html], { type: 'text/html' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
