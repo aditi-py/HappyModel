@@ -43,13 +43,11 @@ yarn-error.log
 
 # Project specific
 .env
-*.csv
-*.xlsx
-*.xls
-*.parquet
-*.json
 upload_sessions/
 model_cache/
+
+# Allow sample data in docs/
+!docs/*.csv
 
 # Vite
 dist/
