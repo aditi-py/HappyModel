@@ -26,30 +26,65 @@ import {
 // ─────────────────────────────────────────────
 const GlobalStyles = () => (
   <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'DM Sans', sans-serif; }
+    body { font-family: 'DM Sans', sans-serif; background: #060611; overflow-x: hidden; }
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,213,0.012) 2px, rgba(0,255,213,0.012) 4px);
+      pointer-events: none; z-index: 9997;
+    }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 3px; }
-    input[type=range] { accent-color: #6366f1; cursor: pointer; }
-    input[type=checkbox] { accent-color: #6366f1; cursor: pointer; width: 16px; height: 16px; }
-    select, input[type=number], input[type=text] {
-      font-family: 'DM Sans', sans-serif;
-      outline: none;
+    ::-webkit-scrollbar-track { background: #0a0a1a; }
+    ::-webkit-scrollbar-thumb { background: #00ffd5; border-radius: 3px; }
+    input[type=range] { accent-color: #00ffd5; cursor: pointer; }
+    input[type=checkbox] { accent-color: #00ffd5; cursor: pointer; width: 16px; height: 16px; }
+    select, input[type=number], input[type=text] { font-family: 'DM Sans', sans-serif; outline: none; }
+    select:focus, input[type=number]:focus, input[type=text]:focus {
+      border-color: #00ffd5 !important;
+      box-shadow: 0 0 0 2px rgba(0,255,213,0.15), 0 0 8px rgba(0,255,213,0.25) !important;
     }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    @keyframes slideIn { from{transform:translateX(120%);opacity:0} to{transform:translateX(0);opacity:1} }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    @keyframes neonPulse {
+      0%,100%{ box-shadow: 0 0 4px #00ffd5, 0 0 10px #00ffd5; }
+      50%    { box-shadow: 0 0 8px #00ffd5, 0 0 24px #00ffd5, 0 0 40px rgba(0,255,213,0.3); }
     }
-    @keyframes slideIn {
-      from { transform: translateX(120%); opacity: 0; }
-      to   { transform: translateX(0);   opacity: 1; }
+    @keyframes cornerBlink { 0%,88%,100%{opacity:1} 93%{opacity:0.2} }
+    @keyframes glitch1 {
+      0%,100%{clip-path:inset(40% 0 61% 0);transform:skew(0.1deg)}
+      25%{clip-path:inset(92% 0 1% 0);transform:skew(0.4deg)}
+      50%{clip-path:inset(25% 0 58% 0);transform:skew(-0.2deg)}
+      75%{clip-path:inset(54% 0 7% 0);transform:skew(0.15deg)}
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    @keyframes glitch2 {
+      0%,100%{clip-path:inset(54% 0 7% 0);transform:skew(-0.1deg)}
+      25%{clip-path:inset(25% 0 58% 0);transform:skew(0.3deg)}
+      50%{clip-path:inset(40% 0 61% 0);transform:skew(-0.4deg)}
+      75%{clip-path:inset(92% 0 1% 0);transform:skew(0.2deg)}
     }
-    .skeleton { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes scanMove { 0%{top:-4px} 100%{top:calc(100% + 4px)} }
+    @keyframes floatY { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+    .skeleton { animation: pulse 1.5s ease-in-out infinite; background: #1e1e4a !important; }
+    .glitch-logo {
+      position: relative; display: inline-block;
+      font-family: 'Orbitron', sans-serif; font-weight: 900;
+      color: #00ffd5; letter-spacing: 2px;
+      text-shadow: 0 0 10px #00ffd5, 0 0 20px rgba(0,255,213,0.5);
+    }
+    .glitch-logo::before,.glitch-logo::after {
+      content: attr(data-text); position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%; opacity: 0.7;
+    }
+    .glitch-logo::before { color: #ff006e; animation: glitch1 5s infinite 0.5s; }
+    .glitch-logo::after  { color: #4361ee; animation: glitch2 5s infinite 1s; }
+    .neon-card { position: relative; overflow: hidden; }
+    .neon-card::before {
+      content: ''; position: absolute; top: -4px; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, #00ffd5, transparent);
+      animation: scanMove 4s linear infinite; opacity: 0.3; pointer-events: none;
+    }
   `}</style>
 );
 
@@ -57,17 +92,19 @@ const GlobalStyles = () => (
 // DESIGN TOKENS
 // ─────────────────────────────────────────────
 const tok = (dark) => ({
-  bg:       dark ? '#0f172a' : '#f8fafc',
-  card:     dark ? '#1e293b' : '#ffffff',
-  border:   dark ? '#334155' : '#e2e8f0',
-  text:     dark ? '#f1f5f9' : '#0f172a',
-  muted:    dark ? '#94a3b8' : '#64748b',
-  accent:   '#6366f1',
-  violet:   '#7c3aed',
-  shadow:   '0 1px 3px rgba(0,0,0,0.12)',
-  radius:   '8px',
+  bg:       dark ? '#060611' : '#f0f4f8',
+  card:     dark ? '#0a0a1a' : '#ffffff',
+  border:   dark ? '#1a1a3e' : '#e2e8f0',
+  text:     dark ? '#c0c8ff' : '#0f172a',
+  muted:    dark ? '#5565a0' : '#64748b',
+  accent:   '#00ffd5',
+  violet:   '#ff006e',
+  shadow:   dark ? '0 2px 12px rgba(0,255,213,0.06)' : '0 1px 3px rgba(0,0,0,0.12)',
+  radius:   '4px',
   trans:    'all 150ms ease',
-  inputBg:  dark ? '#0f172a' : '#f8fafc',
+  inputBg:  dark ? '#080816' : '#f8fafc',
+  neonGlow: '0 0 8px #00ffd5, 0 0 16px rgba(0,255,213,0.3)',
+  magentaGlow: '0 0 8px #ff006e, 0 0 16px rgba(255,0,110,0.3)',
 });
 
 // ─────────────────────────────────────────────
@@ -80,7 +117,7 @@ const initialState = {
   params:   {},
   split:    { testSize: 0.2, cvFolds: 5, useCv: false },
   results:  { current: null, comparison: [] },
-  ui:       { step: 1, darkMode: false, loading: false, error: null, healthOk: true, sidebarOpen: true },
+  ui:       { step: 1, darkMode: true, loading: false, error: null, healthOk: true, sidebarOpen: true },
 };
 
 function reducer(state, action) {
@@ -137,7 +174,7 @@ const MODEL_CATALOG = {
   ],
 };
 
-const COMPLEXITY_COLOR = { Low: '#22c55e', Med: '#f59e0b', High: '#ef4444' };
+const COMPLEXITY_COLOR = { Low: '#39ff14', Med: '#ffbe0b', High: '#ff006e' };
 
 // ─────────────────────────────────────────────
 // DEFAULT PARAMS PER MODEL
@@ -217,7 +254,7 @@ function ToastProvider({ children }) {
 }
 
 function ToastContainer({ toasts, onDismiss }) {
-  const COLOR = { success: '#22c55e', error: '#ef4444', info: '#6366f1' };
+  const COLOR = { success: '#39ff14', error: '#ff006e', info: '#00ffd5' };
   return (
     <div style={{
       position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
@@ -227,21 +264,21 @@ function ToastContainer({ toasts, onDismiss }) {
       {toasts.map(t => (
         <div key={t.id} style={{
           display: 'flex', alignItems: 'flex-start', gap: 10,
-          background: '#1e293b', color: '#f1f5f9',
-          border: `1px solid ${COLOR[t.type]}`,
-          borderLeft: `4px solid ${COLOR[t.type]}`,
-          borderRadius: 8, padding: '12px 14px',
+          background: '#0a0a1a', color: '#c0c8ff',
+          border: `1px solid ${COLOR[t.type]}44`,
+          borderLeft: `3px solid ${COLOR[t.type]}`,
+          borderRadius: 4, padding: '12px 14px',
           fontSize: 13, fontFamily: 'DM Sans, sans-serif',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+          boxShadow: `0 4px 24px rgba(0,0,0,0.6), 0 0 12px ${COLOR[t.type]}22`,
           animation: 'slideIn 200ms ease',
           wordBreak: 'break-word',
         }}>
-          <span style={{ color: COLOR[t.type], fontSize: 16, flexShrink: 0, marginTop: 1 }}>
+          <span style={{ color: COLOR[t.type], fontSize: 16, flexShrink: 0, marginTop: 1, textShadow: `0 0 6px ${COLOR[t.type]}` }}>
             {t.type === 'success' ? '✓' : t.type === 'error' ? '✕' : 'ℹ'}
           </span>
           <span style={{ flex: 1, lineHeight: 1.5 }}>{t.msg}</span>
           <button onClick={() => onDismiss(t.id)} style={{
-            background: 'none', border: 'none', color: '#94a3b8',
+            background: 'none', border: 'none', color: '#5565a0',
             cursor: 'pointer', fontSize: 16, padding: '0 0 0 4px',
             flexShrink: 0, lineHeight: 1,
           }}>×</button>
@@ -254,31 +291,98 @@ function ToastContainer({ toasts, onDismiss }) {
 function useToast() { return React.useContext(ToastContext); }
 
 // ─────────────────────────────────────────────
+// CYBERPUNK BACKGROUND — matrix rain canvas
+// ─────────────────────────────────────────────
+function CyberpunkBackground() {
+  const canvasRef = useRef();
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+    resize();
+    window.addEventListener('resize', resize);
+    const chars = 'アイウエオカキクケコサシスセソ0123456789ABCDEF><=/\\|#$%@!?'.split('');
+    const cols = Math.floor(canvas.width / 22);
+    const drops = Array(cols).fill(0).map(() => Math.random() * -50);
+    let animId;
+    const draw = () => {
+      ctx.fillStyle = 'rgba(6,6,17,0.06)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      drops.forEach((y, i) => {
+        const bright = Math.random() > 0.92;
+        ctx.fillStyle = bright ? '#ffffff' : (Math.random() > 0.5 ? '#00ffd5' : '#00aa88');
+        ctx.font = `${bright ? 'bold ' : ''}13px "Share Tech Mono", monospace`;
+        ctx.globalAlpha = bright ? 0.9 : 0.18 + Math.random() * 0.12;
+        ctx.fillText(chars[Math.floor(Math.random() * chars.length)], i * 22, y * 22);
+        ctx.globalAlpha = 1;
+        if (y * 22 > canvas.height && Math.random() > 0.975) drops[i] = 0;
+        drops[i] += 0.5;
+      });
+      animId = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => { window.removeEventListener('resize', resize); cancelAnimationFrame(animId); };
+  }, []);
+  return <canvas ref={canvasRef} style={{ position: 'fixed', top: 0, left: 0, zIndex: 0, pointerEvents: 'none' }} />;
+}
+
+// Animated L-bracket corner decorations
+function CyberpunkCorners() {
+  const SZ = 48, T = 2, C = '#00ffd5';
+  const corner = (top, left, flipH, flipV) => (
+    <div style={{
+      position: 'fixed',
+      top: top ? 12 : 'auto', bottom: top ? 'auto' : 12,
+      left: left ? 12 : 'auto', right: left ? 'auto' : 12,
+      width: SZ, height: SZ, zIndex: 9998, pointerEvents: 'none',
+      animation: 'cornerBlink 5s infinite',
+      animationDelay: `${(flipH ? 1 : 0) + (flipV ? 2 : 0)}s`,
+    }}>
+      <svg width={SZ} height={SZ} style={{ transform: `scale(${flipH?-1:1},${flipV?-1:1})`, display:'block' }}>
+        <line x1="0" y1={T/2} x2={SZ} y2={T/2} stroke={C} strokeWidth={T} />
+        <line x1={T/2} y1="0" x2={T/2} y2={SZ} stroke={C} strokeWidth={T} />
+        <circle cx="8" cy="8" r="2" fill={C} opacity="0.6" />
+      </svg>
+    </div>
+  );
+  return <>
+    {corner(true,  true,  false, false)}
+    {corner(true,  false, true,  false)}
+    {corner(false, true,  false, true)}
+    {corner(false, false, true,  true)}
+  </>;
+}
+
+// ─────────────────────────────────────────────
 // SMALL UI PRIMITIVES
 // ─────────────────────────────────────────────
-function Spinner({ size = 18, color = '#6366f1' }) {
+function Spinner({ size = 18, color = '#00ffd5' }) {
   return (
     <span style={{
       display: 'inline-block', width: size, height: size,
-      border: `2px solid ${color}33`,
+      border: `2px solid ${color}22`,
       borderTop: `2px solid ${color}`,
       borderRadius: '50%',
       animation: 'spin 600ms linear infinite',
       flexShrink: 0,
+      boxShadow: `0 0 6px ${color}`,
     }} />
   );
 }
 
-function Badge({ children, color = '#6366f1', bg }) {
+function Badge({ children, color = '#00ffd5', bg }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center',
-      padding: '2px 8px', borderRadius: 20,
-      fontSize: 11, fontWeight: 600, letterSpacing: 0.3,
+      padding: '2px 8px', borderRadius: 2,
+      fontSize: 11, fontWeight: 600, letterSpacing: 0.5,
       color: color,
-      background: bg || `${color}1a`,
-      border: `1px solid ${color}33`,
+      background: bg || `${color}12`,
+      border: `1px solid ${color}44`,
       whiteSpace: 'nowrap',
+      fontFamily: 'Share Tech Mono, DM Mono, monospace',
+      textShadow: `0 0 4px ${color}88`,
     }}>
       {children}
     </span>
@@ -316,13 +420,15 @@ function Skeleton({ w = '100%', h = 20, r = 6 }) {
   return <div className="skeleton" style={{ width: w, height: h, borderRadius: r, background: '#334155' }} />;
 }
 
-function Card({ children, style, dark }) {
-  const t = tok(dark);
+function Card({ children, style, dark, neon }) {
+  const t = tok(dark ?? true);
   return (
-    <div style={{
-      background: t.card, border: `1px solid ${t.border}`,
+    <div className={neon !== false ? 'neon-card' : ''} style={{
+      background: t.card,
+      border: `1px solid ${t.border}`,
       borderRadius: t.radius, padding: 20,
-      boxShadow: t.shadow, transition: t.trans,
+      boxShadow: dark !== false ? `${t.shadow}, inset 0 0 30px rgba(0,0,0,0.3)` : t.shadow,
+      transition: t.trans,
       ...style,
     }}>
       {children}
@@ -332,22 +438,38 @@ function Card({ children, style, dark }) {
 
 function Button({ children, onClick, disabled, variant = 'primary', dark, style: extraStyle, size = 'md' }) {
   const [hover, setHover] = useState(false);
-  const t = tok(dark);
+  const t = tok(dark ?? true);
   const pad = size === 'sm' ? '6px 14px' : size === 'lg' ? '14px 28px' : '10px 20px';
-  const fs  = size === 'sm' ? 13 : size === 'lg' ? 16 : 14;
+  const fs  = size === 'sm' ? 12 : size === 'lg' ? 15 : 13;
 
   const base = {
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-    padding: pad, borderRadius: 8, fontFamily: 'DM Sans, sans-serif',
-    fontWeight: 600, fontSize: fs, cursor: disabled ? 'not-allowed' : 'pointer',
-    border: 'none', transition: t.trans, opacity: disabled ? 0.45 : 1,
+    padding: pad, borderRadius: 2, fontFamily: 'DM Sans, sans-serif',
+    fontWeight: 700, fontSize: fs, cursor: disabled ? 'not-allowed' : 'pointer',
+    border: 'none', transition: t.trans, opacity: disabled ? 0.4 : 1,
+    letterSpacing: '0.5px', textTransform: 'uppercase',
     ...extraStyle,
   };
   const styles = {
-    primary:   { ...base, background: hover && !disabled ? '#4f46e5' : '#6366f1', color: '#fff' },
-    secondary: { ...base, background: hover && !disabled ? t.border : 'transparent', color: t.text, border: `1px solid ${t.border}` },
-    danger:    { ...base, background: hover && !disabled ? '#dc2626' : '#ef4444', color: '#fff' },
-    ghost:     { ...base, background: hover && !disabled ? t.border : 'transparent', color: t.muted },
+    primary: {
+      ...base, background: hover && !disabled ? 'rgba(0,255,213,0.1)' : 'transparent',
+      color: '#00ffd5', border: '1px solid #00ffd5',
+      boxShadow: hover && !disabled ? '0 0 12px rgba(0,255,213,0.5), inset 0 0 8px rgba(0,255,213,0.05)' : '0 0 4px rgba(0,255,213,0.2)',
+      textShadow: '0 0 6px rgba(0,255,213,0.8)',
+    },
+    secondary: {
+      ...base, background: hover && !disabled ? 'rgba(0,255,213,0.05)' : 'transparent',
+      color: t.text, border: `1px solid ${t.border}`,
+    },
+    danger: {
+      ...base, background: hover && !disabled ? 'rgba(255,0,110,0.1)' : 'transparent',
+      color: '#ff006e', border: '1px solid #ff006e44',
+      boxShadow: hover && !disabled ? '0 0 10px rgba(255,0,110,0.4)' : 'none',
+    },
+    ghost: {
+      ...base, background: hover && !disabled ? 'rgba(0,255,213,0.05)' : 'transparent',
+      color: t.muted, border: '1px solid transparent',
+    },
   };
   return (
     <button style={styles[variant]} onClick={disabled ? undefined : onClick}
@@ -426,12 +548,13 @@ function StepImport({ state, dispatch }) {
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         style={{
-          border: `2px dashed ${dragging ? t.accent : t.border}`,
-          borderRadius: 12, padding: '48px 32px',
+          border: `1px dashed ${dragging ? '#00ffd5' : '#00ffd533'}`,
+          borderRadius: 4, padding: '48px 32px',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
           cursor: 'pointer', transition: t.trans,
-          background: dragging ? `${t.accent}0d` : t.card,
+          background: dragging ? 'rgba(0,255,213,0.06)' : dark ? 'rgba(0,255,213,0.02)' : t.card,
           textAlign: 'center',
+          boxShadow: dragging ? '0 0 24px rgba(0,255,213,0.2), inset 0 0 24px rgba(0,255,213,0.05)' : 'none',
         }}
       >
         <span style={{ fontSize: 48 }}>📂</span>
@@ -1217,38 +1340,39 @@ const METRIC_INFO = {
 
 function metricColor(key, value) {
   const info = METRIC_INFO[key];
-  if (!info) return '#64748b';
+  if (!info) return '#5565a0';
   const v = parseFloat(value);
   const [g0, g1] = info.good;
   const [o0, o1] = info.ok;
   if (info.higher_better) {
-    if (v >= g0) return '#22c55e';
-    if (v >= o0) return '#f59e0b';
-    return '#ef4444';
+    if (v >= g0) return '#39ff14';
+    if (v >= o0) return '#ffbe0b';
+    return '#ff006e';
   } else {
-    if (v <= g1) return '#22c55e';
-    if (v <= o1) return '#f59e0b';
-    return '#ef4444';
+    if (v <= g1) return '#39ff14';
+    if (v <= o1) return '#ffbe0b';
+    return '#ff006e';
   }
 }
 
 function MetricCard({ mkey, value, dark }) {
-  const t = tok(dark);
+  const t = tok(dark ?? true);
   const info = METRIC_INFO[mkey] || { label: mkey, desc: '', unit: '' };
   const color = metricColor(mkey, value);
   const display = typeof value === 'number' ? value.toFixed(4) : String(value ?? '—');
   return (
     <div style={{
-      background: t.card, border: `1px solid ${t.border}`,
-      borderRadius: 10, padding: '20px 16px',
-      borderTop: `3px solid ${color}`,
-      boxShadow: t.shadow,
+      background: t.card, border: `1px solid ${color}33`,
+      borderRadius: t.radius, padding: '16px 14px',
+      borderTop: `2px solid ${color}`,
+      boxShadow: `${t.shadow}, 0 0 16px ${color}18`,
+      position: 'relative', overflow: 'hidden',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-        <p style={{ fontSize: 12, fontWeight: 600, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{info.label}</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <p style={{ fontSize: 10, fontWeight: 600, color: t.muted, textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'Share Tech Mono, monospace' }}>{info.label}</p>
         <HelpTip text={info.desc} dark={dark} />
       </div>
-      <p style={{ fontFamily: 'DM Mono, monospace', fontSize: 28, fontWeight: 700, color }}>{display}{info.unit}</p>
+      <p style={{ fontFamily: 'Share Tech Mono, DM Mono, monospace', fontSize: 26, fontWeight: 700, color, textShadow: `0 0 10px ${color}` }}>{display}{info.unit}</p>
     </div>
   );
 }
@@ -1264,8 +1388,8 @@ function ConfusionMatrix({ matrix, dark }) {
         {matrix.map((row, i) => row.map((val, j) => {
           const intensity = maxVal > 0 ? val / maxVal : 0;
           const bg = i === j
-            ? `rgba(99, 102, 241, ${0.2 + intensity * 0.7})`
-            : `rgba(239, 68, 68, ${intensity * 0.5})`;
+            ? `rgba(0, 255, 213, ${0.15 + intensity * 0.6})`
+            : `rgba(255, 0, 110, ${intensity * 0.45})`;
           return (
             <div key={`${i}-${j}`} style={{
               background: bg, borderRadius: 4, padding: '12px 8px',
@@ -1410,7 +1534,7 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px 12px;text-align:left
                 <XAxis dataKey="actual" name="Actual" tick={{ fill: t.muted, fontSize: 11 }} label={{ value: 'Actual', position: 'insideBottom', fill: t.muted, fontSize: 11, dy: 10 }} />
                 <YAxis dataKey="predicted" name="Predicted" tick={{ fill: t.muted, fontSize: 11 }} label={{ value: 'Predicted', angle: -90, position: 'insideLeft', fill: t.muted, fontSize: 11 }} />
                 <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 6, fontSize: 12 }} />
-                <Scatter data={actual_vs_predicted} fill="#6366f1" fillOpacity={0.7} />
+                <Scatter data={actual_vs_predicted} fill="#00ffd5" fillOpacity={0.7} />
               </ScatterChart>
             </ResponsiveContainer>
           </Card>
@@ -1426,7 +1550,7 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px 12px;text-align:left
                 <XAxis dataKey="name" tick={{ fill: t.muted, fontSize: 10 }} />
                 <YAxis tick={{ fill: t.muted, fontSize: 11 }} />
                 <Tooltip contentStyle={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 6, fontSize: 12 }} />
-                <Bar dataKey="count" fill="#6366f1" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="count" fill="#00ffd5" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </Card>
@@ -1442,7 +1566,7 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px 12px;text-align:left
                 <XAxis dataKey="fpr" name="FPR" tick={{ fill: t.muted, fontSize: 11 }} label={{ value: 'False Positive Rate', position: 'insideBottom', fill: t.muted, fontSize: 11, dy: 10 }} />
                 <YAxis tick={{ fill: t.muted, fontSize: 11 }} />
                 <Tooltip contentStyle={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 6, fontSize: 12 }} />
-                <Line type="monotone" dataKey="tpr" stroke="#6366f1" dot={false} strokeWidth={2} name="TPR" />
+                <Line type="monotone" dataKey="tpr" stroke="#00ffd5" dot={false} strokeWidth={2} name="TPR" />
               </LineChart>
             </ResponsiveContainer>
           </Card>
@@ -1465,7 +1589,7 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px 12px;text-align:left
                 <XAxis dataKey="x" name="PC1" tick={{ fill: t.muted, fontSize: 11 }} />
                 <YAxis dataKey="y" name="PC2" tick={{ fill: t.muted, fontSize: 11 }} />
                 <Tooltip contentStyle={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 6, fontSize: 12 }} />
-                <Scatter data={pca_2d} fill="#6366f1" fillOpacity={0.7} />
+                <Scatter data={pca_2d} fill="#ff006e" fillOpacity={0.7} />
               </ScatterChart>
             </ResponsiveContainer>
           </Card>
@@ -1481,7 +1605,7 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px 12px;text-align:left
                 <XAxis type="number" tick={{ fill: t.muted, fontSize: 11 }} />
                 <YAxis type="category" dataKey="feature" tick={{ fill: t.text, fontSize: 11 }} width={120} />
                 <Tooltip contentStyle={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 6, fontSize: 12 }} />
-                <Bar dataKey="importance" fill="#7c3aed" radius={[0, 3, 3, 0]} />
+                <Bar dataKey="importance" fill="#ff006e" radius={[0, 3, 3, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </Card>
@@ -1572,17 +1696,20 @@ function Navbar({ state, dispatch }) {
   return (
     <header style={{
       position: 'sticky', top: 0, zIndex: 200,
-      background: t.card, borderBottom: `1px solid ${t.border}`,
-      boxShadow: t.shadow, padding: '0 24px',
-      display: 'flex', alignItems: 'center', height: 56, gap: 20,
+      background: dark ? 'rgba(6,6,17,0.95)' : t.card,
+      borderBottom: `1px solid ${dark ? '#00ffd522' : t.border}`,
+      backdropFilter: 'blur(12px)',
+      boxShadow: dark ? '0 2px 20px rgba(0,255,213,0.08)' : t.shadow,
+      padding: '0 24px',
+      display: 'flex', alignItems: 'center', height: 60, gap: 20,
     }}>
-      {/* Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        <span style={{ fontSize: 22 }}>🤖</span>
-        <span style={{ fontWeight: 700, fontSize: 18, color: t.accent, letterSpacing: -0.3 }}>HappyModel</span>
+      {/* Glitch Logo */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <span style={{ fontSize: 20, filter: 'drop-shadow(0 0 6px #00ffd5)' }}>⬡</span>
+        <span className="glitch-logo" data-text="HappyModel" style={{ fontSize: 16 }}>HappyModel</span>
       </div>
 
-      {/* Step dots */}
+      {/* Step indicator */}
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0 }}>
         {STEPS.map((label, i) => {
           const step = i + 1;
@@ -1592,34 +1719,36 @@ function Navbar({ state, dispatch }) {
             <React.Fragment key={step}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                 <div style={{
-                  width: 28, height: 28, borderRadius: '50%',
+                  width: 26, height: 26, borderRadius: 2,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: done ? t.accent : current ? t.accent : t.border,
-                  color: (done || current) ? '#fff' : t.muted,
-                  fontSize: 12, fontWeight: 700, transition: t.trans,
-                  boxShadow: current ? `0 0 0 3px ${t.accent}33` : 'none',
+                  background: done ? '#00ffd522' : current ? '#00ffd511' : 'transparent',
+                  color: done ? '#00ffd5' : current ? '#00ffd5' : t.muted,
+                  fontSize: 11, fontWeight: 700, transition: t.trans,
+                  border: `1px solid ${done || current ? '#00ffd5' : t.border}`,
+                  boxShadow: current ? '0 0 8px #00ffd5, 0 0 16px rgba(0,255,213,0.3)' : 'none',
+                  fontFamily: 'Share Tech Mono, monospace',
                 }}>
                   {done ? '✓' : step}
                 </div>
-                <span style={{ fontSize: 10, color: current ? t.accent : t.muted, fontWeight: current ? 600 : 400, whiteSpace: 'nowrap' }}>
-                  {label}
+                <span style={{ fontSize: 9, color: current ? '#00ffd5' : t.muted, fontWeight: current ? 700 : 400, whiteSpace: 'nowrap', fontFamily: 'Share Tech Mono, monospace', letterSpacing: 0.5, textShadow: current ? '0 0 6px #00ffd5' : 'none' }}>
+                  {label.toUpperCase()}
                 </span>
               </div>
               {i < STEPS.length - 1 && (
-                <div style={{ width: 40, height: 2, background: done ? t.accent : t.border, margin: '0 4px', marginBottom: 16, transition: t.trans }} />
+                <div style={{ width: 36, height: 1, background: done ? '#00ffd5' : t.border, margin: '0 4px', marginBottom: 18, transition: t.trans, boxShadow: done ? '0 0 4px #00ffd5' : 'none' }} />
               )}
             </React.Fragment>
           );
         })}
       </div>
 
-      {/* Dark mode toggle */}
+      {/* Theme toggle */}
       <button onClick={toggleDark} style={{
-        background: t.border, border: 'none', borderRadius: 8,
-        padding: '6px 12px', cursor: 'pointer', fontSize: 16,
-        transition: t.trans, color: t.text,
+        background: 'transparent', border: `1px solid ${t.border}`, borderRadius: 2,
+        padding: '6px 10px', cursor: 'pointer', fontSize: 14, color: t.muted,
+        transition: t.trans, fontFamily: 'Share Tech Mono, monospace',
       }}>
-        {dark ? '☀️' : '🌙'}
+        {dark ? '[ LIGHT ]' : '[ DARK ]'}
       </button>
     </header>
   );
@@ -1638,19 +1767,19 @@ function Sidebar({ state, dispatch }) {
 
   return (
     <aside style={{
-      width: ui.sidebarOpen ? 220 : 48,
+      width: ui.sidebarOpen ? 210 : 44,
       flexShrink: 0, transition: 'width 200ms ease',
-      background: t.card, borderRight: `1px solid ${t.border}`,
-      display: 'flex', flexDirection: 'column',
-      overflow: 'hidden',
+      background: dark ? 'rgba(6,6,17,0.8)' : t.card,
+      borderRight: `1px solid ${dark ? '#00ffd518' : t.border}`,
+      display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
       <button onClick={() => dispatch({ type: 'SET_UI', payload: { sidebarOpen: !ui.sidebarOpen } })}
         style={{
           background: 'none', border: 'none', cursor: 'pointer',
-          padding: '12px', color: t.muted, fontSize: 16, textAlign: 'right',
-          transition: t.trans,
+          padding: '10px', color: '#00ffd5', fontSize: 12, textAlign: 'right',
+          fontFamily: 'Share Tech Mono, monospace', letterSpacing: 1,
         }}>
-        {ui.sidebarOpen ? '◀' : '▶'}
+        {ui.sidebarOpen ? '◀◀' : '▶▶'}
       </button>
 
       <nav style={{ flex: 1, padding: '4px 0' }}>
@@ -1661,18 +1790,29 @@ function Sidebar({ state, dispatch }) {
           return (
             <div key={step} style={{
               display: 'flex', alignItems: 'center', gap: 10,
-              padding: '10px 14px', cursor: 'pointer',
-              background: current ? `${t.accent}15` : 'transparent',
-              borderLeft: `3px solid ${current ? t.accent : 'transparent'}`,
+              padding: '10px 12px', cursor: done ? 'pointer' : 'default',
+              background: current ? 'rgba(0,255,213,0.06)' : 'transparent',
+              borderLeft: `2px solid ${current ? '#00ffd5' : done ? '#00ffd544' : 'transparent'}`,
+              boxShadow: current ? 'inset 0 0 20px rgba(0,255,213,0.03)' : 'none',
               transition: t.trans,
-              color: current ? t.accent : done ? t.muted : t.muted,
             }}
               onClick={() => done && dispatch({ type: 'SET_UI', payload: { step } })}>
-              <span style={{ fontSize: 16, flexShrink: 0 }}>
-                {done ? <span style={{ color: '#22c55e' }}>✓</span> : STEP_ICONS[i]}
+              <span style={{
+                fontSize: 13, flexShrink: 0,
+                color: done ? '#39ff14' : current ? '#00ffd5' : t.muted,
+                textShadow: current ? '0 0 6px #00ffd5' : done ? '0 0 4px #39ff14' : 'none',
+                fontFamily: 'Share Tech Mono, monospace',
+              }}>
+                {done ? '✓' : STEP_ICONS[i]}
               </span>
               {ui.sidebarOpen && (
-                <span style={{ fontSize: 13, fontWeight: current ? 700 : 400, whiteSpace: 'nowrap', color: current ? t.accent : done ? t.text : t.muted }}>
+                <span style={{
+                  fontSize: 11, fontWeight: current ? 700 : 400,
+                  whiteSpace: 'nowrap', letterSpacing: 0.5,
+                  color: current ? '#00ffd5' : done ? t.text : t.muted,
+                  textShadow: current ? '0 0 6px rgba(0,255,213,0.6)' : 'none',
+                  fontFamily: 'DM Sans, sans-serif',
+                }}>
                   {label}
                 </span>
               )}
@@ -1705,15 +1845,19 @@ function BottomBar({ state, dispatch }) {
   return (
     <div style={{
       position: 'sticky', bottom: 0, zIndex: 100,
-      background: t.card, borderTop: `1px solid ${t.border}`,
-      padding: '12px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      boxShadow: '0 -1px 4px rgba(0,0,0,0.06)',
+      background: dark ? 'rgba(6,6,17,0.95)' : t.card,
+      backdropFilter: 'blur(12px)',
+      borderTop: `1px solid ${dark ? '#00ffd518' : t.border}`,
+      padding: '10px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      boxShadow: dark ? '0 -2px 20px rgba(0,255,213,0.06)' : '0 -1px 4px rgba(0,0,0,0.06)',
     }}>
       <Button dark={dark} variant="secondary" disabled={ui.step === 1}
         onClick={() => dispatch({ type: 'SET_UI', payload: { step: ui.step - 1 } })}>
         ← Back
       </Button>
-      <span style={{ fontSize: 12, color: t.muted }}>Step {ui.step} of 5</span>
+      <span style={{ fontSize: 10, color: t.muted, fontFamily: 'Share Tech Mono, monospace', letterSpacing: 1 }}>
+        STEP {ui.step} / 5
+      </span>
       {ui.step < 4 && (
         <Button dark={dark} disabled={!canNext}
           onClick={() => dispatch({ type: 'SET_UI', payload: { step: ui.step + 1 } })}>
@@ -1756,9 +1900,11 @@ function AppInner() {
     <div style={{
       minHeight: '100vh', background: t.bg, color: t.text,
       fontFamily: 'DM Sans, sans-serif', transition: t.trans,
-      display: 'flex', flexDirection: 'column',
+      display: 'flex', flexDirection: 'column', position: 'relative',
     }}>
       <GlobalStyles />
+      {dark && <CyberpunkBackground />}
+      {dark && <CyberpunkCorners />}
       <Navbar state={state} dispatch={dispatch} />
 
       {/* Backend health banner */}
@@ -1789,7 +1935,7 @@ function AppInner() {
         </div>
       )}
 
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative', zIndex: 1 }}>
         <Sidebar state={state} dispatch={dispatch} />
         <main style={{ flex: 1, overflow: 'auto', padding: 28, minWidth: 0 }}>
           <StepComponent state={state} dispatch={dispatch} />
