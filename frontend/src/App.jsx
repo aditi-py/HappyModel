@@ -1598,16 +1598,22 @@ function StepResults({ state, dispatch }) {
     const pcaRaw = current.pca_2d;
     const pca = Array.isArray(pcaRaw) ? pcaRaw : [];
 
-    const fiRows = fi.slice(0, 20).map(({feature, importance}) =>
+    const fiShown  = Math.min(20, fi.length);
+    const avpShown = Math.min(50, avp.length);
+    const resShown = Math.min(50, res.length);
+    const rocShown = Math.min(20, roc.length);
+    const pcaShown = Math.min(50, pca.length);
+
+    const fiRows = fi.slice(0, fiShown).map(({feature, importance}) =>
       `<tr><td>${feature}</td><td>${typeof importance === 'number' ? importance.toFixed(6) : importance}</td></tr>`).join('');
 
-    const avpRows = avp.slice(0, 50).map(({actual, predicted}) =>
+    const avpRows = avp.slice(0, avpShown).map(({actual, predicted}) =>
       `<tr><td>${typeof actual==='number'?actual.toFixed(4):actual}</td><td>${typeof predicted==='number'?predicted.toFixed(4):predicted}</td></tr>`).join('');
 
-    const resRows = res.slice(0, 50).map((v, i) =>
+    const resRows = res.slice(0, resShown).map((v, i) =>
       `<tr><td>${i+1}</td><td>${typeof v==='number'?v.toFixed(6):v}</td></tr>`).join('');
 
-    const rocRows = roc.slice(0, 20).map(({fpr, tpr}) =>
+    const rocRows = roc.slice(0, rocShown).map(({fpr, tpr}) =>
       `<tr><td>${typeof fpr==='number'?fpr.toFixed(4):fpr}</td><td>${typeof tpr==='number'?tpr.toFixed(4):tpr}</td></tr>`).join('');
 
     const cmHtml = cm ? `
@@ -1618,8 +1624,19 @@ function StepResults({ state, dispatch }) {
         </table>
       </div>` : '';
 
-    const pcaRows = pca.slice(0, 50).map(({x, y, cluster}) =>
+    const pcaRows = pca.slice(0, pcaShown).map(({x, y, cluster}) =>
       `<tr><td>${typeof x==='number'?x.toFixed(4):x}</td><td>${typeof y==='number'?y.toFixed(4):y}</td><td>${cluster ?? '—'}</td></tr>`).join('');
+
+    const fiHeading  = fiShown  < fi.length  ? `A1 · Feature Importances (top ${fiShown})`            : 'A1 · Feature Importances';
+    const fiNote     = fiShown  < fi.length  ? `Showing top ${fiShown} of ${fi.length} features.`     : `Showing all ${fi.length} features.`;
+    const avpHeading = avpShown < avp.length ? `A2 · Actual vs Predicted (first ${avpShown} rows)`    : 'A2 · Actual vs Predicted';
+    const avpNote    = avpShown < avp.length ? `Showing first ${avpShown} of ${avp.length} test samples.` : `Showing all ${avp.length} test samples.`;
+    const resHeading = resShown < res.length ? `A3 · Residuals (first ${resShown} rows)`              : 'A3 · Residuals';
+    const resNote    = resShown < res.length ? `Showing first ${resShown} of ${res.length} residuals.` : `Showing all ${res.length} residuals.`;
+    const rocHeading = rocShown < roc.length ? 'A5 · ROC Curve Data (sample)'                         : 'A5 · ROC Curve Data';
+    const rocNote    = rocShown < roc.length ? `Showing ${rocShown} evenly-spaced points of ${roc.length} total.` : `Showing all ${roc.length} ROC points.`;
+    const pcaHeading = pcaShown < pca.length ? `A6 · PCA 2D Cluster Data (first ${pcaShown} points)`  : 'A6 · PCA 2D Cluster Data';
+    const pcaNote    = pcaShown < pca.length ? `Showing first ${pcaShown} of ${pca.length} cluster points.` : `Showing all ${pca.length} cluster points.`;
 
     const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <title>HappyModel Report – ${current.modelName}</title>
@@ -1679,34 +1696,35 @@ function StepResults({ state, dispatch }) {
 <h2 style="margin-top:40px;padding-top:16px;border-top:2px solid #e2e8f0">Appendix — Full Data</h2>
 
 ${fi.length > 0 ? `<div class="card">
-  <h3>A1 · Feature Importances (top 20)</h3>
+  <h3>${fiHeading}</h3>
   <table><thead><tr><th>Feature</th><th>Importance</th></tr></thead><tbody>${fiRows}</tbody></table>
-  <p class="note">Showing top 20 of ${fi.length} features.</p>
+  <p class="note">${fiNote}</p>
 </div>` : ''}
 
 ${avp.length > 0 ? `<div class="card">
-  <h3>A2 · Actual vs Predicted (first 50 rows)</h3>
+  <h3>${avpHeading}</h3>
   <table><thead><tr><th>Actual</th><th>Predicted</th></tr></thead><tbody>${avpRows}</tbody></table>
-  <p class="note">Showing first 50 of ${avp.length} test samples.</p>
+  <p class="note">${avpNote}</p>
 </div>` : ''}
 
 ${res.length > 0 ? `<div class="card">
-  <h3>A3 · Residuals (first 50 rows)</h3>
+  <h3>${resHeading}</h3>
   <table><thead><tr><th>#</th><th>Residual (Actual − Predicted)</th></tr></thead><tbody>${resRows}</tbody></table>
-  <p class="note">Showing first 50 of ${res.length} residuals.</p>
+  <p class="note">${resNote}</p>
 </div>` : ''}
 
 ${cmHtml}
 
 ${roc.length > 0 ? `<div class="card">
-  <h3>A5 · ROC Curve Data (sample)</h3>
+  <h3>${rocHeading}</h3>
   <table><thead><tr><th>FPR</th><th>TPR</th></tr></thead><tbody>${rocRows}</tbody></table>
-  <p class="note">Showing 20 evenly-spaced points of ${roc.length} total.</p>
+  <p class="note">${rocNote}</p>
 </div>` : ''}
 
 ${pca.length > 0 ? `<div class="card">
-  <h3>A6 · PCA 2D Cluster Data (first 50 points)</h3>
+  <h3>${pcaHeading}</h3>
   <table><thead><tr><th>PC1</th><th>PC2</th><th>Cluster</th></tr></thead><tbody>${pcaRows}</tbody></table>
+  <p class="note">${pcaNote}</p>
 </div>` : ''}
 
 </body></html>`;
@@ -1758,11 +1776,20 @@ ${pca.length > 0 ? `<div class="card">
       const res = Array.isArray(c.residuals) ? c.residuals : [];
       const cm  = c.confusion_matrix || null;
 
-      const fiRows  = fi.slice(0,20).map(({feature,importance}) =>
+      const fiShown  = Math.min(20, fi.length);
+      const avpShown = Math.min(30, avp.length);
+      const resShown = Math.min(30, res.length);
+      const fiHead     = fiShown  < fi.length  ? `Feature Importances (top ${fiShown})`   : 'Feature Importances';
+      const avpHead    = avpShown < avp.length ? `Actual vs Predicted (first ${avpShown})` : 'Actual vs Predicted';
+      const resHead    = resShown < res.length ? `Residuals (first ${resShown})`           : 'Residuals';
+      const fiCaption  = fiShown  === fi.length  ? `Showing all ${fi.length} features.`      : `Showing top ${fiShown} of ${fi.length} features.`;
+      const avpCaption = avpShown === avp.length ? `Showing all ${avp.length} test samples.` : `Showing first ${avpShown} of ${avp.length} test samples.`;
+      const resCaption = resShown === res.length ? `Showing all ${res.length} residuals.`    : `Showing first ${resShown} of ${res.length} residuals.`;
+      const fiRows  = fi.slice(0, fiShown).map(({feature,importance}) =>
         `<tr><td>${feature}</td><td>${typeof importance==='number'?importance.toFixed(6):importance}</td></tr>`).join('');
-      const avpRows = avp.slice(0,30).map(({actual,predicted}) =>
+      const avpRows = avp.slice(0, avpShown).map(({actual,predicted}) =>
         `<tr><td>${typeof actual==='number'?actual.toFixed(4):actual}</td><td>${typeof predicted==='number'?predicted.toFixed(4):predicted}</td></tr>`).join('');
-      const resRows = res.slice(0,30).map((v,i) =>
+      const resRows = res.slice(0, resShown).map((v,i) =>
         `<tr><td>${i+1}</td><td>${typeof v==='number'?v.toFixed(6):v}</td></tr>`).join('');
       const cmHtml  = cm ? `<h4 style="margin:16px 0 8px">Confusion Matrix</h4>
         <table style="width:auto">${cm.map(row=>`<tr>${row.map(v=>`<td style="text-align:center;min-width:40px;font-weight:700;padding:6px">${v}</td>`).join('')}</tr>`).join('')}</table>` : '';
@@ -1778,12 +1805,15 @@ ${pca.length > 0 ? `<div class="card">
     <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
     <tbody>${Object.entries(c.params||{}).map(([k,v])=>`<tr><td>${k}</td><td><b>${v}</b></td></tr>`).join('')}</tbody>
   </table>
-  ${fi.length>0 ? `<h4 style="margin-bottom:8px">Feature Importances (top 20)</h4>
-  <table><thead><tr><th>Feature</th><th>Importance</th></tr></thead><tbody>${fiRows}</tbody></table>` : ''}
-  ${avp.length>0 ? `<h4 style="margin:16px 0 8px">Actual vs Predicted (first 30)</h4>
-  <table><thead><tr><th>Actual</th><th>Predicted</th></tr></thead><tbody>${avpRows}</tbody></table>` : ''}
-  ${res.length>0 ? `<h4 style="margin:16px 0 8px">Residuals (first 30)</h4>
-  <table><thead><tr><th>#</th><th>Residual</th></tr></thead><tbody>${resRows}</tbody></table>` : ''}
+  ${fi.length>0 ? `<h4 style="margin-bottom:8px">${fiHead}</h4>
+  <table><thead><tr><th>Feature</th><th>Importance</th></tr></thead><tbody>${fiRows}</tbody></table>
+  <p style="font-size:11px;color:#5565a0;margin-top:6px">${fiCaption}</p>` : ''}
+  ${avp.length>0 ? `<h4 style="margin:16px 0 8px">${avpHead}</h4>
+  <table><thead><tr><th>Actual</th><th>Predicted</th></tr></thead><tbody>${avpRows}</tbody></table>
+  <p style="font-size:11px;color:#5565a0;margin-top:6px">${avpCaption}</p>` : ''}
+  ${res.length>0 ? `<h4 style="margin:16px 0 8px">${resHead}</h4>
+  <table><thead><tr><th>#</th><th>Residual</th></tr></thead><tbody>${resRows}</tbody></table>
+  <p style="font-size:11px;color:#5565a0;margin-top:6px">${resCaption}</p>` : ''}
   ${cmHtml}
 </div>`;
     }).join('');
