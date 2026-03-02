@@ -6,6 +6,7 @@ import React, {
   useEffect,
   useMemo,
 } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ResponsiveContainer,
   LineChart,
@@ -257,9 +258,9 @@ function ToastContainer({ toasts, onDismiss }) {
   const COLOR = { success: '#39ff14', error: '#ff006e', info: '#00ffd5' };
   return (
     <div style={{
-      position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
-      display: 'flex', flexDirection: 'column', gap: 10,
-      maxWidth: 400, width: 'calc(100vw - 48px)',
+      position: 'fixed', top: 68, right: 20, zIndex: 9999,
+      display: 'flex', flexDirection: 'column', gap: 8,
+      maxWidth: 360, width: 'calc(100vw - 40px)',
     }}>
       {toasts.map(t => (
         <div key={t.id} style={{
@@ -392,31 +393,56 @@ function Badge({ children, color = '#00ffd5', bg }) {
   );
 }
 
-function HelpTip({ text, dark }) {
-  const [show, setShow] = useState(false);
+function HelpTip({ text }) {
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef();
+
+  const handleEnter = () => {
+    if (!btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    // prefer showing above; if too close to top, show below
+    const above = r.top > 120;
+    setPos({
+      left: Math.min(r.left + r.width / 2, window.innerWidth - 130),
+      top: above ? r.top - 8 : r.bottom + 8,
+      above,
+    });
+  };
+
   return (
-    <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
-      onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
-      <span style={{
+    <span style={{ display: 'inline-flex', alignItems: 'center' }}
+      onMouseEnter={handleEnter} onMouseLeave={() => setPos(null)}>
+      <span ref={btnRef} style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         width: 16, height: 16, borderRadius: '50%',
         background: '#00ffd515', color: '#00ffd5',
-        border: '1px solid #00ffd544',
+        border: '1px solid #00ffd555',
         fontSize: 10, cursor: 'help', fontWeight: 700, userSelect: 'none',
-        textShadow: '0 0 4px #00ffd5',
+        flexShrink: 0,
       }}>?</span>
-      {show && (
+      {pos && createPortal(
         <div style={{
-          position: 'absolute', bottom: 22, left: '50%', transform: 'translateX(-50%)',
-          background: '#0a0a1a', color: '#c0c8ff',
-          border: '1px solid #00ffd533',
-          borderRadius: 4, padding: '8px 12px', fontSize: 12, lineHeight: 1.6,
-          width: 220, zIndex: 9000,
-          boxShadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 12px rgba(0,255,213,0.15)',
-          pointerEvents: 'none', whiteSpace: 'normal',
+          position: 'fixed',
+          left: pos.left,
+          top: pos.above ? pos.top - 4 : pos.top + 4,
+          transform: pos.above ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
+          background: '#08081a',
+          color: '#c0c8ff',
+          border: '1px solid #00ffd544',
+          borderRadius: 4,
+          padding: '8px 12px',
+          fontSize: 12,
+          lineHeight: 1.65,
+          width: 220,
+          zIndex: 99999,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.9), 0 0 16px rgba(0,255,213,0.12)',
+          pointerEvents: 'none',
+          whiteSpace: 'normal',
+          fontFamily: 'DM Sans, sans-serif',
         }}>
           {text}
-        </div>
+        </div>,
+        document.body
       )}
     </span>
   );
@@ -1208,7 +1234,7 @@ function ModelParamForm({ modelId, params, setParam, dark }) {
 }
 
 function StepParams({ state, dispatch }) {
-  const { model, params, split, data, ui } = state;
+  const { model, params, split, data, ui, features } = state;
   const dark = ui.darkMode;
   const t = tok(dark);
   const toast = useToast();
@@ -1235,7 +1261,7 @@ function StepParams({ state, dispatch }) {
         params,
         test_size:   split.testSize,
         cv_folds:    split.useCv ? split.cvFolds : null,
-        date_column: state.features.dateColumn || null,
+        date_column: features.dateColumn || null,
       };
       const res = await fetch('http://localhost:8000/train', {
         method: 'POST',
