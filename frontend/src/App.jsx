@@ -114,9 +114,9 @@ const tok = (dark) => ({
 const initialState = {
   data:     { fileId: null, fileName: '', columns: [], types: {}, preview: [], shape: {} },
   model:    { category: '', id: '', name: '', taskType: '' },
-  features: { inputs: [], target: '', dateColumn: '' },
+  features: { inputs: [], target: '', dateColumn: '', imbalanceStrategy: 'none', typeOverrides: {} },
   params:   {},
-  split:    { testSize: 0.2, valSize: 0.1, cvFolds: 5, useCv: false, bootstrap: false },
+  split:    { testSize: 0.2, valSize: 0.1, cvFolds: 5, useCv: false, bootstrap: false, autoTune: false, autoTuneCv: 3 },
   results:  { current: null, comparison: [] },
   ui:       { step: 1, darkMode: true, loading: false, error: null, healthOk: true, sidebarOpen: true },
 };
@@ -904,6 +904,15 @@ function StepFeatures({ state, dispatch }) {
     dispatch({ type: 'SET_FEATURES', payload: { inputs: next } });
   };
 
+  const cycleType = (col, e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const current = features.typeOverrides[col] || data.types[col] || 'numeric';
+    const CYCLE = ['numeric', 'categorical', 'text'];
+    const next = CYCLE[(CYCLE.indexOf(current) + 1) % CYCLE.length];
+    dispatch({ type: 'SET_FEATURES', payload: { typeOverrides: { ...features.typeOverrides, [col]: next } } });
+  };
+
   const numericCols = data.columns.filter(c => data.types[c.name] === 'numeric').map(c => c.name);
   const correlations = useMemo(() => {
     if (!features.target || data.preview.length === 0) return {};
@@ -1017,7 +1026,8 @@ function StepFeatures({ state, dispatch }) {
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 400, overflowY: 'auto', paddingRight: 4 }}>
             {data.columns.map(col => {
-              const dtype = data.types[col.name] || 'text';
+              const overriddenType = features.typeOverrides[col.name];
+              const dtype = overriddenType || data.types[col.name] || 'text';
               const meta  = TYPE_META[dtype] || TYPE_META.text;
               const checked = features.inputs.includes(col.name);
               const isTarget = col.name === features.target;
@@ -1034,7 +1044,19 @@ function StepFeatures({ state, dispatch }) {
                   <input type="checkbox" checked={checked} disabled={isTarget}
                     onChange={() => toggleInput(col.name)} />
                   <span style={{ flex: 1, fontSize: 13, color: t.text, fontWeight: checked ? 600 : 400 }}>{col.name}</span>
-                  <Badge color={meta.color}>{meta.icon}</Badge>
+                  {/* Clickable type badge — click to cycle type override */}
+                  <span
+                    title={overriddenType ? `Overridden to ${dtype} (click to cycle)` : `Type: ${dtype} (click to override)`}
+                    onClick={(e) => cycleType(col.name, e)}
+                    style={{
+                      fontSize: 11, padding: '2px 7px', borderRadius: 4, fontWeight: 700, cursor: 'pointer',
+                      background: overriddenType ? '#ff006e22' : `${meta.color}22`,
+                      color: overriddenType ? '#ff006e' : meta.color,
+                      border: `1px solid ${overriddenType ? '#ff006e66' : meta.color + '55'}`,
+                      userSelect: 'none',
+                    }}>
+                    {meta.icon}{overriddenType ? ' ✎' : ''}
+                  </span>
                   {Object.hasOwn(correlations, col.name) && (
                     <span style={{
                       fontFamily: 'DM Mono, monospace', fontSize: 11,
@@ -1046,7 +1068,7 @@ function StepFeatures({ state, dispatch }) {
               );
             })}
           </div>
-          <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+          <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <Button dark={dark} size="sm" variant="secondary"
               onClick={() => dispatch({ type: 'SET_FEATURES', payload: { inputs: data.columns.map(c => c.name).filter(n => n !== features.target) } })}>
               Select All
@@ -1055,6 +1077,15 @@ function StepFeatures({ state, dispatch }) {
               onClick={() => dispatch({ type: 'SET_FEATURES', payload: { inputs: [] } })}>
               Clear
             </Button>
+            {Object.keys(features.typeOverrides).length > 0 && (
+              <button onClick={() => dispatch({ type: 'SET_FEATURES', payload: { typeOverrides: {} } })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#ff006e', fontFamily: 'DM Sans, sans-serif' }}>
+                ↩ Reset type overrides ({Object.keys(features.typeOverrides).length})
+              </button>
+            )}
+            <span style={{ fontSize: 10, color: t.muted, marginLeft: 'auto' }}>
+              💡 Click type badge to override
+            </span>
           </div>
         </div>
 
@@ -1093,6 +1124,84 @@ function StepFeatures({ state, dispatch }) {
               </select>
             </div>
           )}
+
+          {/* Class Imbalance section */}
+          {features.target && (() => {
+            const targetColInfo = data.columns.find(c => c.name === features.target);
+            const targetType = data.types[features.target];
+            const vc = targetColInfo?.value_counts;
+            if (!vc || targetType === 'numeric') return null;
+
+            const vcEntries = Object.entries(vc).sort((a, b) => b[1] - a[1]);
+            const total = vcEntries.reduce((s, [, v]) => s + v, 0);
+            const maxCount = vcEntries[0]?.[1] || 1;
+            const minCount = vcEntries[vcEntries.length - 1]?.[1] || 1;
+            const ratio = total > 0 ? (maxCount / minCount) : 1;
+            const isImbalanced = ratio > 3;
+
+            return (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <h4 style={{ fontSize: 13, fontWeight: 600, color: t.text, margin: 0 }}>Class Distribution</h4>
+                  {isImbalanced && (
+                    <span style={{ fontSize: 10, color: '#ffaa00', border: '1px solid #ffaa0055', borderRadius: 3, padding: '1px 6px', fontWeight: 700 }}>
+                      ⚠️ Imbalanced ({ratio.toFixed(1)}:1)
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
+                  {vcEntries.slice(0, 8).map(([cls, cnt]) => {
+                    const pct = total > 0 ? cnt / total : 0;
+                    const barColor = pct > 0.6 ? '#ff006e' : pct > 0.3 ? '#ffaa00' : t.accent;
+                    return (
+                      <div key={cls} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, color: t.muted, width: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>{cls}</span>
+                        <div style={{ flex: 1, height: 8, background: t.border, borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{ width: `${pct * 100}%`, height: '100%', background: barColor, borderRadius: 3 }} />
+                        </div>
+                        <span style={{ fontSize: 11, color: t.muted, fontFamily: 'DM Mono, monospace', flexShrink: 0, width: 44, textAlign: 'right' }}>
+                          {(pct * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {vcEntries.length > 8 && (
+                    <span style={{ fontSize: 11, color: t.muted }}>+{vcEntries.length - 8} more classes</span>
+                  )}
+                </div>
+                {isImbalanced && (
+                  <div>
+                    <label style={{ fontSize: 11, color: t.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 6 }}>
+                      Imbalance Strategy
+                    </label>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {[
+                        { k: 'none',         label: 'None' },
+                        { k: 'class_weight', label: 'Class Weights' },
+                        { k: 'smote',        label: 'SMOTE' },
+                      ].map(({ k, label }) => (
+                        <button key={k}
+                          onClick={() => dispatch({ type: 'SET_FEATURES', payload: { imbalanceStrategy: k } })}
+                          style={{
+                            padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                            border: `1px solid ${features.imbalanceStrategy === k ? t.accent : t.border}`,
+                            background: features.imbalanceStrategy === k ? `${t.accent}22` : t.card,
+                            color: features.imbalanceStrategy === k ? t.accent : t.muted,
+                          }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {features.imbalanceStrategy === 'smote' && (
+                      <p style={{ fontSize: 11, color: '#ffaa00', marginTop: 6 }}>
+                        ⚠️ SMOTE requires <code>imbalanced-learn</code> to be installed on the backend. Falls back silently if unavailable.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Correlation table */}
           {features.target && numericCols.length > 1 && (
@@ -1355,9 +1464,13 @@ function StepParams({ state, dispatch }) {
         params,
         test_size:   split.testSize,
         val_size:    split.valSize,
-        cv_folds:    split.useCv ? split.cvFolds : null,
-        bootstrap:   split.bootstrap,
-        date_column: features.dateColumn || null,
+        cv_folds:     split.useCv ? split.cvFolds : null,
+        bootstrap:    split.bootstrap,
+        auto_tune:          split.autoTune,
+        auto_tune_cv:       split.autoTune ? split.autoTuneCv : 3,
+        imbalance_strategy: features.imbalanceStrategy || 'none',
+        type_overrides:     features.typeOverrides || {},
+        date_column:        features.dateColumn || null,
       };
       const res = await fetch('http://localhost:8000/train', {
         method: 'POST',
@@ -1471,6 +1584,50 @@ function StepParams({ state, dispatch }) {
         )}
       </Card>
 
+      {/* Auto-Tune Card */}
+      {!['mlp','lstm','cnn_1d','autoencoder','kmeans','dbscan','hierarchical','arima','sarima','exponential_smoothing'].includes(model.id) && (
+        <Card dark={dark} neon>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: split.autoTune ? 14 : 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: t.text }}>⚡ Auto-Tune</span>
+              <HelpTip text="Runs GridSearchCV over a predefined hyperparameter grid to find the best settings. Replaces your manual params with the tuned values. Fast = 3-fold CV, Thorough = 5-fold CV." />
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" checked={split.autoTune}
+                onChange={e => dispatch({ type: 'SET_SPLIT', payload: { autoTune: e.target.checked } })} />
+              <span style={{ fontSize: 13, color: split.autoTune ? t.accent : t.muted, fontWeight: 600 }}>
+                {split.autoTune ? 'Enabled' : 'Disabled'}
+              </span>
+            </label>
+          </div>
+          {split.autoTune && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <p style={{ fontSize: 12, color: t.muted }}>
+                Best params will override the manual settings above. Adds 10–60s depending on dataset size.
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 13, color: t.muted, whiteSpace: 'nowrap' }}>Search CV:</span>
+                {[
+                  { k: 3, label: 'Fast (3-fold)' },
+                  { k: 5, label: 'Thorough (5-fold)' },
+                ].map(({ k, label }) => (
+                  <button key={k} onClick={() => dispatch({ type: 'SET_SPLIT', payload: { autoTuneCv: k } })}
+                    style={{
+                      padding: '5px 14px', borderRadius: 6,
+                      border: `1px solid ${split.autoTuneCv === k ? t.accent : t.border}`,
+                      background: split.autoTuneCv === k ? `${t.accent}22` : t.card,
+                      color: split.autoTuneCv === k ? t.accent : t.muted,
+                      cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                    }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Train button */}
       <Button dark={dark} size="lg" onClick={handleTrain} disabled={training}
         style={{ width: '100%', padding: '16px', fontSize: 16, letterSpacing: 0.5 }}>
@@ -1570,6 +1727,11 @@ function StepResults({ state, dispatch }) {
   const toast = useToast();
   const current = results.current;
   const [threshold, setThreshold] = useState(0.5);
+  const [activeTab, setActiveTab] = useState('results');
+  const [predictInputs, setPredictInputs] = useState({});
+  const [predictLoading, setPredictLoading] = useState(false);
+  const [predictResult, setPredictResult] = useState(null);
+  const [predictHistory, setPredictHistory] = useState([]);
 
   if (!current) {
     return (
@@ -1940,6 +2102,36 @@ ${modelCards}
     toast('Comparison report exported!', 'success');
   } catch(err) { toast('Export failed: ' + err.message, 'error'); } };
 
+  const featureStats = current.feature_stats || {};
+
+  const handlePredict = async () => {
+    if (!current.predict_id) { toast('No trained model. Please train first.', 'error'); return; }
+    setPredictLoading(true);
+    setPredictResult(null);
+    try {
+      const res = await fetch('http://localhost:8000/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ predict_id: current.predict_id, inputs: predictInputs }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Prediction request failed');
+      }
+      const predData = await res.json();
+      setPredictResult(predData);
+      setPredictHistory(prev => [
+        { inputs: { ...predictInputs }, result: predData, timestamp: Date.now() },
+        ...prev,
+      ].slice(0, 20));
+      toast('Prediction complete!', 'success');
+    } catch (err) {
+      toast('Prediction error: ' + err.message, 'error');
+    } finally {
+      setPredictLoading(false);
+    }
+  };
+
   const actual_vs_predicted  = current.actual_vs_predicted || [];
   const residuals            = current.residuals || [];
   const feature_importances  = current.feature_importances || [];
@@ -2007,6 +2199,27 @@ ${modelCards}
         </div>
       </div>
 
+      {/* Tab Bar — shown only when a trained model is available for prediction */}
+      {current.predict_id && (
+        <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${t.border}`, marginTop: -8 }}>
+          {[
+            { key: 'results', label: '📊  Results' },
+            { key: 'predict', label: '⚡  Predict' },
+          ].map(({ key, label }) => (
+            <button key={key} onClick={() => setActiveTab(key)} style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: '10px 22px', fontSize: 13, fontWeight: activeTab === key ? 700 : 400,
+              color: activeTab === key ? t.accent : t.muted,
+              borderBottom: activeTab === key ? `2px solid ${t.accent}` : '2px solid transparent',
+              fontFamily: 'Share Tech Mono, monospace', letterSpacing: 0.5,
+              transition: 'all 0.15s',
+            }}>{label}</button>
+          ))}
+        </div>
+      )}
+
+      {(!current.predict_id || activeTab === 'results') && <>
+
       {/* Train vs Test score row */}
       {current.train_score != null && current.test_score != null && (
         <div style={{ display: 'flex', gap: 12 }}>
@@ -2048,6 +2261,51 @@ ${modelCards}
             <span style={{ color: '#8b9cf7' }}>({current.bootstrap_ci.ci_lo.toFixed(4)} – {current.bootstrap_ci.ci_hi.toFixed(4)})</span>
           </span>
           <span style={{ color: t.muted, marginLeft: 12, fontSize: 11 }}>Bootstrap n={current.bootstrap_ci.n}</span>
+        </div>
+      )}
+
+      {/* Auto-Tune results */}
+      {current.auto_tune && !current.auto_tune.error && (
+        <Card dark={dark}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: t.accent }}>⚡ Auto-Tune Results</span>
+            <Badge color={t.accent}>GridSearchCV</Badge>
+            <span style={{ fontSize: 11, color: t.muted, marginLeft: 'auto' }}>
+              {current.auto_tune.n_candidates} candidates · {current.auto_tune.cv_folds}-fold · {current.auto_tune.tuning_time}s
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <p style={{ fontSize: 11, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, marginBottom: 8 }}>Best Parameters Found</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {Object.entries(current.auto_tune.best_params || {}).map(([k, v]) => (
+                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    background: `${t.accent}10`, border: `1px solid ${t.accent}22`, borderRadius: 6, padding: '5px 10px' }}>
+                    <span style={{ fontSize: 12, color: t.muted, fontWeight: 600 }}>{k}</span>
+                    <span style={{ fontSize: 12, color: t.accent, fontFamily: 'DM Mono, monospace', fontWeight: 700 }}>
+                      {v == null ? 'None' : String(v)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 140 }}>
+              <div style={{ background: `${t.accent}12`, border: `1px solid ${t.accent}44`, borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+                <p style={{ fontSize: 10, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, marginBottom: 4 }}>
+                  Best CV Score
+                </p>
+                <p style={{ fontSize: 22, fontWeight: 700, fontFamily: 'DM Mono, monospace', color: t.accent }}>
+                  {current.auto_tune.best_cv_score?.toFixed(4)}
+                </p>
+                <p style={{ fontSize: 10, color: t.muted, marginTop: 2 }}>{current.auto_tune.scoring?.toUpperCase()}</p>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+      {current.auto_tune?.error && (
+        <div style={{ background: '#ff006e12', border: '1px solid #ff006e44', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#ff006e' }}>
+          ⚠️ Auto-tune failed: {current.auto_tune.error}
         </div>
       )}
 
@@ -2369,6 +2627,41 @@ ${modelCards}
           </Card>
         )}
 
+        {/* Class Distribution (training data) */}
+        {current.class_distribution && taskType === 'classification' && (() => {
+          const cd = current.class_distribution;
+          const total = Object.values(cd).reduce((s, v) => s + v, 0);
+          const entries = Object.entries(cd).sort((a, b) => b[1] - a[1]);
+          const ratio = current.imbalance_ratio;
+          const isImbalanced = ratio != null && ratio > 3;
+          return (
+            <Card dark={dark}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <h4 style={{ fontSize: 13, fontWeight: 600, color: t.text, margin: 0 }}>Training Class Distribution</h4>
+                {isImbalanced && <Badge color="#ffaa00">⚠️ {ratio?.toFixed(1)}:1 ratio</Badge>}
+                {!isImbalanced && <Badge color="#39ff14">✓ Balanced</Badge>}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {entries.map(([cls, cnt]) => {
+                  const pct = total > 0 ? cnt / total : 0;
+                  const barColor = pct > 0.6 ? '#ff006e' : pct > 0.3 ? '#ffaa00' : '#39ff14';
+                  return (
+                    <div key={cls} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 11, color: t.muted, width: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>{cls}</span>
+                      <div style={{ flex: 1, height: 10, background: t.border, borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ width: `${pct * 100}%`, height: '100%', background: barColor, borderRadius: 3 }} />
+                      </div>
+                      <span style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: t.muted, flexShrink: 0, width: 60, textAlign: 'right' }}>
+                        {cnt} ({(pct * 100).toFixed(1)}%)
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          );
+        })()}
+
         {/* Model Analysis */}
         <Card dark={dark} style={{ gridColumn: 'span 2' }}>
           <h4 style={{ fontSize: 13, fontWeight: 600, color: t.text, marginBottom: 8 }}>
@@ -2444,6 +2737,185 @@ ${modelCards}
             </table>
           </div>
         </Card>
+      )}
+
+      </>}
+      {/* ── Predict Tab ────────────────────────────────────────────────────── */}
+      {current.predict_id && activeTab === 'predict' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* Feature Input Form */}
+          <Card dark={dark}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <h4 style={{ fontSize: 14, fontWeight: 700, color: t.text, margin: 0 }}>Input Feature Values</h4>
+              <HelpTip text="Enter values for each feature. The model will predict the target column based on these inputs. Numeric inputs accept any number; categorical inputs accept text (original values before encoding)." />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 14 }}>
+              {features.inputs.map(col => {
+                const stats    = featureStats[col] || {};
+                const colType  = (data.types || {})[col] || 'numeric';
+                const isNum    = colType === 'numeric';
+                const colInfo  = (data.columns || []).find(c => c.name === col) || {};
+                const typeClr  = isNum ? t.accent : '#a855f7';
+                const curVal   = predictInputs[col] !== undefined
+                  ? predictInputs[col]
+                  : (isNum && stats.mean != null ? String(Number(stats.mean).toFixed(4)) : '');
+                return (
+                  <div key={col} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <label style={{ fontSize: 11, color: t.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>{col}</span>
+                      <span style={{ fontSize: 9, color: typeClr, border: `1px solid ${typeClr}55`, borderRadius: 3, padding: '0 4px', flexShrink: 0 }}>
+                        {isNum ? 'NUM' : 'CAT'}
+                      </span>
+                    </label>
+                    <input
+                      type={isNum ? 'number' : 'text'}
+                      value={curVal}
+                      onChange={e => setPredictInputs(prev => ({ ...prev, [col]: e.target.value }))}
+                      placeholder={isNum
+                        ? (stats.min != null ? `${Number(stats.min).toFixed(2)} – ${Number(stats.max).toFixed(2)}` : '')
+                        : ((colInfo.sample_values || []).slice(0, 2).map(String).join(', '))}
+                      step={isNum ? 'any' : undefined}
+                      style={{
+                        background: dark ? '#0f0f2a' : '#f8fafc',
+                        border: `1px solid ${t.border}`,
+                        borderRadius: 6, padding: '7px 10px', fontSize: 13, color: t.text,
+                        width: '100%', fontFamily: 'DM Mono, monospace',
+                      }}
+                    />
+                    {isNum && stats.min != null ? (
+                      <span style={{ fontSize: 10, color: t.muted }}>
+                        {Number(stats.min).toFixed(2)} – {Number(stats.max).toFixed(2)} · mean {Number(stats.mean).toFixed(2)}
+                      </span>
+                    ) : !isNum && (colInfo.sample_values || []).length > 0 ? (
+                      <span style={{ fontSize: 10, color: t.muted }}>
+                        e.g. {(colInfo.sample_values || []).slice(0, 3).map(String).join(', ')}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20 }}>
+              <Button dark={dark} onClick={handlePredict} disabled={predictLoading}>
+                {predictLoading ? '⏳ Predicting…' : '⚡ Run Prediction'}
+              </Button>
+              <button
+                onClick={() => { setPredictInputs({}); setPredictResult(null); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: t.muted, fontFamily: 'DM Sans, sans-serif' }}>
+                Reset
+              </button>
+            </div>
+          </Card>
+
+          {/* Result display */}
+          {predictResult && (
+            <Card dark={dark}>
+              <h4 style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 16 }}>Prediction Result</h4>
+              {predictResult.task_type === 'regression' && (
+                <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                  <p style={{ fontSize: 11, color: t.muted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
+                    Predicted {features.target}
+                  </p>
+                  <p style={{ fontSize: 40, fontWeight: 900, fontFamily: 'DM Mono, monospace', color: t.accent,
+                    textShadow: `0 0 20px ${t.accent}, 0 0 40px ${t.accent}88` }}>
+                    {typeof predictResult.prediction === 'number' ? predictResult.prediction.toFixed(4) : predictResult.prediction}
+                  </p>
+                </div>
+              )}
+              {predictResult.task_type === 'classification' && (
+                <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                  <p style={{ fontSize: 11, color: t.muted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
+                    Predicted {features.target}
+                  </p>
+                  <p style={{ fontSize: 40, fontWeight: 900, fontFamily: 'DM Mono, monospace', color: '#ff006e',
+                    textShadow: `0 0 20px #ff006e, 0 0 40px #ff006e88` }}>
+                    {String(predictResult.prediction)}
+                  </p>
+                  {predictResult.confidence != null && (
+                    <div style={{ marginTop: 16 }}>
+                      <p style={{ fontSize: 11, color: t.muted, marginBottom: 8, fontWeight: 600 }}>
+                        Confidence:{' '}
+                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 18, fontWeight: 700, color: '#ff006e' }}>
+                          {(predictResult.confidence * 100).toFixed(1)}%
+                        </span>
+                      </p>
+                      <div style={{ height: 8, background: t.border, borderRadius: 4, overflow: 'hidden', maxWidth: 240, margin: '0 auto' }}>
+                        <div style={{ height: '100%', width: `${predictResult.confidence * 100}%`, background: '#ff006e',
+                          borderRadius: 4, boxShadow: `0 0 8px #ff006e` }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* Prediction History table */}
+          {predictHistory.length > 0 && (
+            <Card dark={dark}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <h4 style={{ fontSize: 13, fontWeight: 700, color: t.text, margin: 0 }}>
+                  Prediction History{' '}
+                  <span style={{ fontSize: 11, color: t.muted, fontWeight: 400 }}>
+                    ({predictHistory.length} run{predictHistory.length !== 1 ? 's' : ''})
+                  </span>
+                </h4>
+                <button onClick={() => setPredictHistory([])}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: t.muted, fontFamily: 'DM Sans, sans-serif' }}>
+                  Clear
+                </button>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: dark ? '#0f172a' : '#f8fafc' }}>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', color: t.muted, borderBottom: `1px solid ${t.border}`, fontWeight: 600 }}>#</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', color: t.muted, borderBottom: `1px solid ${t.border}`, fontWeight: 600 }}>Prediction</th>
+                      {features.inputs.slice(0, 5).map(col => (
+                        <th key={col} style={{ padding: '8px 12px', textAlign: 'left', color: t.muted, borderBottom: `1px solid ${t.border}`, fontWeight: 600, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{col}</th>
+                      ))}
+                      {features.inputs.length > 5 && (
+                        <th style={{ padding: '8px 12px', textAlign: 'left', color: t.muted, borderBottom: `1px solid ${t.border}`, fontWeight: 600 }}>
+                          +{features.inputs.length - 5} more
+                        </th>
+                      )}
+                      <th style={{ padding: '8px 12px', textAlign: 'left', color: t.muted, borderBottom: `1px solid ${t.border}`, fontWeight: 600 }}>Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {predictHistory.map((h, i) => (
+                      <tr key={i} style={{ background: i % 2 === 0 ? t.card : (dark ? '#162032' : '#f8fafc') }}>
+                        <td style={{ padding: '7px 12px', color: t.muted, borderBottom: `1px solid ${t.border}22`, fontFamily: 'DM Mono, monospace' }}>
+                          {predictHistory.length - i}
+                        </td>
+                        <td style={{ padding: '7px 12px', color: h.result.task_type === 'classification' ? '#ff006e' : t.accent, fontFamily: 'DM Mono, monospace', fontWeight: 700, borderBottom: `1px solid ${t.border}22` }}>
+                          {typeof h.result.prediction === 'number' ? h.result.prediction.toFixed(4) : String(h.result.prediction)}
+                          {h.result.confidence != null && (
+                            <span style={{ fontSize: 10, color: t.muted, marginLeft: 6 }}>
+                              ({(h.result.confidence * 100).toFixed(1)}%)
+                            </span>
+                          )}
+                        </td>
+                        {features.inputs.slice(0, 5).map(col => (
+                          <td key={col} style={{ padding: '7px 12px', color: t.text, borderBottom: `1px solid ${t.border}22`, fontFamily: 'DM Mono, monospace', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {String(h.inputs[col] !== undefined ? h.inputs[col] : '—')}
+                          </td>
+                        ))}
+                        {features.inputs.length > 5 && (
+                          <td style={{ padding: '7px 12px', color: t.muted, borderBottom: `1px solid ${t.border}22`, fontSize: 11 }}>…</td>
+                        )}
+                        <td style={{ padding: '7px 12px', color: t.muted, borderBottom: `1px solid ${t.border}22`, fontSize: 11 }}>
+                          {new Date(h.timestamp).toLocaleTimeString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+        </div>
       )}
     </div>
   );
