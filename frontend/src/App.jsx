@@ -2345,6 +2345,14 @@ function BottomBar({ state, dispatch }) {
     return false;
   }, [ui.step, data.fileId, model.id, features]);
 
+  const nextHint = useMemo(() => {
+    if (canNext) return null;
+    if (ui.step === 1) return !ui.healthOk ? 'Start the backend first' : 'Upload a file to continue';
+    if (ui.step === 2) return 'Select a model to continue';
+    if (ui.step === 3) return 'Choose a target column and at least one feature';
+    return null;
+  }, [canNext, ui.step, ui.healthOk]);
+
   if (ui.step === 5) return null;
 
   return (
@@ -2364,10 +2372,17 @@ function BottomBar({ state, dispatch }) {
         STEP {ui.step} / 5
       </span>
       {ui.step < 4 && (
-        <Button dark={dark} disabled={!canNext}
-          onClick={() => dispatch({ type: 'SET_UI', payload: { step: ui.step + 1 } })}>
-          Next Step →
-        </Button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          {nextHint && (
+            <span style={{ fontSize: 10, color: '#ff006e', fontFamily: 'Share Tech Mono, monospace', letterSpacing: 0.5 }}>
+              ↑ {nextHint}
+            </span>
+          )}
+          <Button dark={dark} disabled={!canNext}
+            onClick={() => dispatch({ type: 'SET_UI', payload: { step: ui.step + 1 } })}>
+            Next Step →
+          </Button>
+        </div>
       )}
       {ui.step === 4 && <div style={{ width: 120 }} />}
     </div>
@@ -2391,11 +2406,15 @@ function AppInner() {
     } catch (_) {}
   }, []);
 
-  // Health check
+  // Health check — polls every 5 s so banner auto-clears when backend starts
   useEffect(() => {
-    fetch('http://localhost:8000/health')
-      .then(r => { if (!r.ok) throw new Error(); dispatch({ type: 'SET_UI', payload: { healthOk: true } }); })
-      .catch(() => dispatch({ type: 'SET_UI', payload: { healthOk: false } }));
+    const check = () =>
+      fetch('http://localhost:8000/health')
+        .then(r => { if (!r.ok) throw new Error(); dispatch({ type: 'SET_UI', payload: { healthOk: true } }); })
+        .catch(() => dispatch({ type: 'SET_UI', payload: { healthOk: false } }));
+    check();
+    const id = setInterval(check, 5000);
+    return () => clearInterval(id);
   }, []);
 
   const STEPS = [StepImport, StepModel, StepFeatures, StepParams, StepResults];
