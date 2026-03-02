@@ -840,17 +840,17 @@ function StepModel({ state, dispatch }) {
     return { Regression: reg, Classification: cls, Clustering: 'kmeans' };
   }, [data.shape, data.types, hasDatetime]);
 
-  // Single model id for the banner: use the recommended-tab's suggestion
-  const recommendation = useMemo(() => (
-    recommendations[recommendedTab] || Object.values(recommendations)[0] || null
-  ), [recommendations, recommendedTab]);
-
   const recommendedTab = useMemo(() => {
     if (hasDatetime) return 'Statistical';
     const numericCols = Object.entries(data.types || {}).filter(([, v]) => v === 'numeric');
     if (numericCols.length > 0) return 'Regression';
     return 'Clustering';
   }, [data.types, hasDatetime]);
+
+  // Single model id for the banner: use the recommended-tab's suggestion
+  const recommendation = useMemo(() => (
+    recommendations[recommendedTab] || Object.values(recommendations)[0] || null
+  ), [recommendations, recommendedTab]);
 
   const recModel = useMemo(() => {
     for (const [, models] of Object.entries(MODEL_CATALOG)) {
