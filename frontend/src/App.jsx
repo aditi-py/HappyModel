@@ -114,7 +114,7 @@ const tok = (dark) => ({
 const initialState = {
   data:     { fileId: null, fileName: '', columns: [], types: {}, preview: [], shape: {} },
   model:    { category: '', id: '', name: '', taskType: '' },
-  features: { inputs: [], target: '', dateColumn: '', imbalanceStrategy: 'none', typeOverrides: {} },
+  features: { inputs: [], target: '', dateColumn: '', imbalanceStrategy: 'none', typeOverrides: {}, preprocNullNumeric: 'median', preprocNullCat: 'mode', preprocScaling: 'none' },
   params:   {},
   split:    { testSize: 0.2, valSize: 0.1, cvFolds: 5, useCv: false, bootstrap: false, autoTune: false, autoTuneCv: 3 },
   results:  { current: null, comparison: [] },
@@ -583,10 +583,10 @@ function Button({ children, onClick, disabled, variant = 'primary', dark, style:
 // STEP 1 — IMPORT DATA
 // ─────────────────────────────────────────────
 const TYPE_META = {
-  numeric:     { label: 'Numeric',     icon: '🔢', color: '#3b82f6' },
-  categorical: { label: 'Categorical', icon: '🔤', color: '#a855f7' },
-  datetime:    { label: 'Datetime',    icon: '📅', color: '#f97316' },
-  text:        { label: 'Text',        icon: '📝', color: '#64748b' },
+  numeric:     { label: 'Num',  iconName: 'hex',     color: '#3b82f6' },
+  categorical: { label: 'Cat', iconName: 'sliders',  color: '#a855f7' },
+  datetime:    { label: 'Date', iconName: 'chart',   color: '#f97316' },
+  text:        { label: 'Txt',  iconName: 'info',    color: '#64748b' },
 };
 
 function StepImport({ state, dispatch }) {
@@ -1004,7 +1004,7 @@ function StepFeatures({ state, dispatch }) {
           borderRadius: 8, padding: '10px 14px',
           display: 'flex', alignItems: 'flex-start', gap: 10,
         }}>
-          <span style={{ fontSize: 16 }}>💡</span>
+          <span style={{ color: t.accent, flexShrink: 0, marginTop: 1 }}><CyberIcon name="info" size={16} color={t.accent} /></span>
           <div>
             <p style={{ color: t.accent, fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
               Top correlated features with "{features.target}"
@@ -1049,13 +1049,15 @@ function StepFeatures({ state, dispatch }) {
                     title={overriddenType ? `Overridden to ${dtype} (click to cycle)` : `Type: ${dtype} (click to override)`}
                     onClick={(e) => cycleType(col.name, e)}
                     style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
                       fontSize: 11, padding: '2px 7px', borderRadius: 4, fontWeight: 700, cursor: 'pointer',
                       background: overriddenType ? '#ff006e22' : `${meta.color}22`,
                       color: overriddenType ? '#ff006e' : meta.color,
                       border: `1px solid ${overriddenType ? '#ff006e66' : meta.color + '55'}`,
-                      userSelect: 'none',
+                      userSelect: 'none', fontFamily: 'Share Tech Mono, monospace',
                     }}>
-                    {meta.icon}{overriddenType ? ' ✎' : ''}
+                    <CyberIcon name={meta.iconName} size={10} color={overriddenType ? '#ff006e' : meta.color} />
+                    {meta.label}{overriddenType ? ' ✎' : ''}
                   </span>
                   {Object.hasOwn(correlations, col.name) && (
                     <span style={{
@@ -1083,8 +1085,8 @@ function StepFeatures({ state, dispatch }) {
                 ↩ Reset type overrides ({Object.keys(features.typeOverrides).length})
               </button>
             )}
-            <span style={{ fontSize: 10, color: t.muted, marginLeft: 'auto' }}>
-              💡 Click type badge to override
+            <span style={{ fontSize: 10, color: t.muted, marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <CyberIcon name="info" size={10} color={t.muted} /> Click type badge to override
             </span>
           </div>
         </div>
@@ -1202,6 +1204,102 @@ function StepFeatures({ state, dispatch }) {
               </div>
             );
           })()}
+
+          {/* Preprocessing Controls */}
+          <Card dark={dark}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+              <CyberIcon name="sliders" size={14} color={t.accent} />
+              <h4 style={{ fontSize: 13, fontWeight: 700, color: t.text, margin: 0 }}>Preprocessing</h4>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+              {/* Null handling — numeric */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 6 }}>
+                  Null Imputation — Numeric
+                </label>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {[
+                    { k: 'median', label: 'Median' },
+                    { k: 'mean',   label: 'Mean' },
+                    { k: 'zero',   label: 'Zero' },
+                    { k: 'drop',   label: 'Drop rows' },
+                  ].map(({ k, label }) => (
+                    <button key={k}
+                      onClick={() => dispatch({ type: 'SET_FEATURES', payload: { preprocNullNumeric: k } })}
+                      style={{
+                        padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        border: `1px solid ${features.preprocNullNumeric === k ? t.accent : t.border}`,
+                        background: features.preprocNullNumeric === k ? `${t.accent}22` : t.card,
+                        color: features.preprocNullNumeric === k ? t.accent : t.muted,
+                        fontFamily: 'Share Tech Mono, monospace',
+                      }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Null handling — categorical */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 6 }}>
+                  Null Imputation — Categorical
+                </label>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {[
+                    { k: 'mode',    label: 'Mode' },
+                    { k: 'unknown', label: '"unknown"' },
+                    { k: 'drop',    label: 'Drop rows' },
+                  ].map(({ k, label }) => (
+                    <button key={k}
+                      onClick={() => dispatch({ type: 'SET_FEATURES', payload: { preprocNullCat: k } })}
+                      style={{
+                        padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        border: `1px solid ${features.preprocNullCat === k ? t.accent : t.border}`,
+                        background: features.preprocNullCat === k ? `${t.accent}22` : t.card,
+                        color: features.preprocNullCat === k ? t.accent : t.muted,
+                        fontFamily: 'Share Tech Mono, monospace',
+                      }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Feature scaling */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 6 }}>
+                  Feature Scaling
+                </label>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {[
+                    { k: 'none',     label: 'None' },
+                    { k: 'standard', label: 'Standard (z-score)' },
+                    { k: 'minmax',   label: 'Min-Max' },
+                    { k: 'robust',   label: 'Robust' },
+                  ].map(({ k, label }) => (
+                    <button key={k}
+                      onClick={() => dispatch({ type: 'SET_FEATURES', payload: { preprocScaling: k } })}
+                      style={{
+                        padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        border: `1px solid ${features.preprocScaling === k ? t.accent : t.border}`,
+                        background: features.preprocScaling === k ? `${t.accent}22` : t.card,
+                        color: features.preprocScaling === k ? t.accent : t.muted,
+                        fontFamily: 'Share Tech Mono, monospace',
+                      }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {features.preprocScaling !== 'none' && (
+                  <p style={{ fontSize: 10, color: t.muted, marginTop: 5 }}>
+                    Scaling is applied to numeric feature columns after null imputation.
+                  </p>
+                )}
+              </div>
+
+            </div>
+          </Card>
 
           {/* Correlation table */}
           {features.target && numericCols.length > 1 && (
@@ -1468,9 +1566,12 @@ function StepParams({ state, dispatch }) {
         bootstrap:    split.bootstrap,
         auto_tune:          split.autoTune,
         auto_tune_cv:       split.autoTune ? split.autoTuneCv : 3,
-        imbalance_strategy: features.imbalanceStrategy || 'none',
-        type_overrides:     features.typeOverrides || {},
-        date_column:        features.dateColumn || null,
+        imbalance_strategy:    features.imbalanceStrategy || 'none',
+        type_overrides:        features.typeOverrides || {},
+        date_column:           features.dateColumn || null,
+        preproc_null_numeric:  features.preprocNullNumeric || 'median',
+        preproc_null_cat:      features.preprocNullCat || 'mode',
+        preproc_scaling:       features.preprocScaling || 'none',
       };
       const res = await fetch('http://localhost:8000/train', {
         method: 'POST',
@@ -1589,7 +1690,7 @@ function StepParams({ state, dispatch }) {
         <Card dark={dark} neon>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: split.autoTune ? 14 : 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: t.text }}>⚡ Auto-Tune</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: t.text, display: 'flex', alignItems: 'center', gap: 6 }}><CyberIcon name="sliders" size={14} color={t.text} /> Auto-Tune</span>
               <HelpTip text="Runs GridSearchCV over a predefined hyperparameter grid to find the best settings. Replaces your manual params with the tuned values. Fast = 3-fold CV, Thorough = 5-fold CV." />
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
@@ -1697,11 +1798,27 @@ function MetricCard({ mkey, value, dark }) {
 function ConfusionMatrix({ matrix, dark }) {
   const t = tok(dark);
   if (!matrix || !Array.isArray(matrix)) return null;
+  const n = matrix.length;
   const maxVal = Math.max(...matrix.flat());
+
+  const isBinary = n === 2;
+  const TN = isBinary ? matrix[0][0] : null;
+  const FP = isBinary ? matrix[0][1] : null;
+  const FN = isBinary ? matrix[1][0] : null;
+  const TP = isBinary ? matrix[1][1] : null;
+
+  const perClassStats = !isBinary ? matrix.map((row, i) => {
+    const tp = matrix[i][i];
+    const fp = matrix.reduce((s, r, r2) => r2 !== i ? s + r[i] : s, 0);
+    const fn = row.reduce((s, v, c) => c !== i ? s + v : s, 0);
+    const tn = matrix.flat().reduce((s, v) => s + v, 0) - tp - fp - fn;
+    return { cls: i, tp, fp, fn, tn };
+  }) : null;
+
   return (
     <div>
       <h4 style={{ fontSize: 13, fontWeight: 600, color: t.text, marginBottom: 10 }}>Confusion Matrix</h4>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${matrix[0].length}, 1fr)`, gap: 2 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${n}, 1fr)`, gap: 2 }}>
         {matrix.map((row, i) => row.map((val, j) => {
           const intensity = maxVal > 0 ? val / maxVal : 0;
           const bg = i === j
@@ -1716,6 +1833,61 @@ function ConfusionMatrix({ matrix, dark }) {
           );
         }))}
       </div>
+
+      {isBinary && (
+        <div style={{ marginTop: 14 }}>
+          <p style={{ fontSize: 11, fontWeight: 600, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+            Binary Breakdown
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            {[
+              { abbr: 'TP', label: 'True Pos',  val: TP, color: '#39ff14', desc: 'Correctly predicted positive' },
+              { abbr: 'TN', label: 'True Neg',  val: TN, color: '#00ffd5', desc: 'Correctly predicted negative' },
+              { abbr: 'FP', label: 'False Pos', val: FP, color: '#ffaa00', desc: 'Predicted positive, actually negative (Type I error)' },
+              { abbr: 'FN', label: 'False Neg', val: FN, color: '#ff006e', desc: 'Predicted negative, actually positive (Type II error)' },
+            ].map(({ abbr, label, val, color, desc }) => (
+              <div key={abbr} title={desc} style={{
+                background: `${color}15`, border: `1px solid ${color}44`,
+                borderRadius: 6, padding: '8px 6px', textAlign: 'center',
+              }}>
+                <p style={{ fontSize: 9, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4, fontFamily: 'Share Tech Mono, monospace' }}>{abbr}</p>
+                <p style={{ fontSize: 18, fontWeight: 700, color, fontFamily: 'DM Mono, monospace' }}>{val}</p>
+                <p style={{ fontSize: 9, color: t.muted, marginTop: 3 }}>{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!isBinary && perClassStats && (
+        <div style={{ marginTop: 14 }}>
+          <p style={{ fontSize: 11, fontWeight: 600, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+            Per-Class Breakdown (one-vs-rest)
+          </p>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr>
+                  {['Class', 'TP', 'TN', 'FP', 'FN'].map(h => (
+                    <th key={h} style={{ padding: '5px 10px', color: t.muted, fontWeight: 600, textAlign: 'center', borderBottom: `1px solid ${t.border}`, fontFamily: 'Share Tech Mono, monospace', fontSize: 11 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {perClassStats.map(({ cls, tp, tn, fp, fn }) => (
+                  <tr key={cls}>
+                    <td style={{ padding: '5px 10px', color: t.accent, fontFamily: 'DM Mono, monospace', textAlign: 'center' }}>{cls}</td>
+                    <td style={{ padding: '5px 10px', color: '#39ff14', fontFamily: 'DM Mono, monospace', textAlign: 'center' }}>{tp}</td>
+                    <td style={{ padding: '5px 10px', color: '#00ffd5', fontFamily: 'DM Mono, monospace', textAlign: 'center' }}>{tn}</td>
+                    <td style={{ padding: '5px 10px', color: '#ffaa00', fontFamily: 'DM Mono, monospace', textAlign: 'center' }}>{fp}</td>
+                    <td style={{ padding: '5px 10px', color: '#ff006e', fontFamily: 'DM Mono, monospace', textAlign: 'center' }}>{fn}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2203,17 +2375,20 @@ ${modelCards}
       {current.predict_id && (
         <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${t.border}`, marginTop: -8 }}>
           {[
-            { key: 'results', label: '📊  Results' },
-            { key: 'predict', label: '⚡  Predict' },
-          ].map(({ key, label }) => (
+            { key: 'results', icon: 'chart', text: 'Results' },
+            { key: 'predict', icon: 'cpu',   text: 'Predict' },
+          ].map(({ key, icon, text }) => (
             <button key={key} onClick={() => setActiveTab(key)} style={{
               background: 'none', border: 'none', cursor: 'pointer',
               padding: '10px 22px', fontSize: 13, fontWeight: activeTab === key ? 700 : 400,
               color: activeTab === key ? t.accent : t.muted,
               borderBottom: activeTab === key ? `2px solid ${t.accent}` : '2px solid transparent',
               fontFamily: 'Share Tech Mono, monospace', letterSpacing: 0.5,
-              transition: 'all 0.15s',
-            }}>{label}</button>
+              transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 7,
+            }}>
+              <CyberIcon name={icon} size={13} color={activeTab === key ? t.accent : t.muted} />
+              {text}
+            </button>
           ))}
         </div>
       )}
@@ -2268,7 +2443,7 @@ ${modelCards}
       {current.auto_tune && !current.auto_tune.error && (
         <Card dark={dark}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: t.accent }}>⚡ Auto-Tune Results</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: t.accent, display: 'flex', alignItems: 'center', gap: 6 }}><CyberIcon name="sliders" size={14} color={t.accent} /> Auto-Tune Results</span>
             <Badge color={t.accent}>GridSearchCV</Badge>
             <span style={{ fontSize: 11, color: t.muted, marginLeft: 'auto' }}>
               {current.auto_tune.n_candidates} candidates · {current.auto_tune.cv_folds}-fold · {current.auto_tune.tuning_time}s
@@ -2593,40 +2768,6 @@ ${modelCards}
           );
         })()}
 
-        {/* Regression Metrics Display */}
-        {taskType === 'regression' && (
-          <Card dark={dark} style={{ gridColumn: 'span 2' }}>
-            <h4 style={{ fontSize: 13, fontWeight: 600, color: t.text, marginBottom: 12 }}>
-              Regression Metrics
-            </h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
-              {['r2', 'mae', 'rmse', 'mape'].map(metric => {
-                const val = metrics[metric];
-                if (val === undefined) return null;
-                const num = typeof val === 'number' ? val : parseFloat(val);
-                const isR2 = metric === 'r2';
-                const pct = isR2 ? Math.max(0, Math.min(1, num)) : Math.max(0, Math.min(1, 1 - Math.min(num, 1)));
-                const metricColor = isR2
-                  ? (num >= 0.8 ? '#39ff14' : num >= 0.6 ? '#00ffd5' : num >= 0.4 ? '#ffaa00' : '#ff006e')
-                  : (num <= 0.2 ? '#39ff14' : num <= 0.4 ? '#00ffd5' : num <= 0.6 ? '#ffaa00' : '#ff006e');
-                return (
-                  <div key={metric} style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 8, padding: 12 }}>
-                    <p style={{ fontSize: 11, color: t.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-                      {metric === 'r2' ? 'R² Score' : metric.toUpperCase()}
-                    </p>
-                    <p style={{ fontSize: 22, fontWeight: 700, color: metricColor, fontFamily: 'DM Mono, monospace', marginBottom: 4 }}>
-                      {num.toFixed(4)}
-                    </p>
-                    <div style={{ background: t.border, height: 4, borderRadius: 2, overflow: 'hidden', marginTop: 8 }}>
-                      <div style={{ background: metricColor, height: '100%', width: `${pct * 100}%` }}></div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        )}
-
         {/* Class Distribution (training data) */}
         {current.class_distribution && taskType === 'classification' && (() => {
           const cd = current.class_distribution;
@@ -2798,7 +2939,10 @@ ${modelCards}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20 }}>
               <Button dark={dark} onClick={handlePredict} disabled={predictLoading}>
-                {predictLoading ? '⏳ Predicting…' : '⚡ Run Prediction'}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <CyberIcon name="cpu" size={14} color="currentColor" />
+                  {predictLoading ? 'Predicting…' : 'Run Prediction'}
+                </span>
               </Button>
               <button
                 onClick={() => { setPredictInputs({}); setPredictResult(null); }}

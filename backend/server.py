@@ -18,7 +18,7 @@ from sklearn.model_selection import (
     train_test_split, cross_val_score, KFold, StratifiedKFold,
     TimeSeriesSplit, learning_curve as sk_learning_curve, GridSearchCV
 )
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler, RobustScaler
 from sklearn.metrics import (
     mean_absolute_error, mean_squared_error, mean_absolute_percentage_error, r2_score,
     accuracy_score, precision_score, recall_score, f1_score, roc_auc_score,
@@ -409,14 +409,15 @@ def preprocess_data(
     feature_cols: List[str],
     target_col: Optional[str] = None,
     type_overrides: Optional[Dict[str, str]] = None,
+    null_numeric: str = "median",      # median | mean | zero | drop
+    null_cat: str = "mode",            # mode | unknown | drop
+    scaling: str = "none",             # none | standard | minmax | robust
 ):
-    """Preprocess data: handle nulls, encode categoricals, apply type overrides."""
+    """Preprocess data: handle nulls, encode categoricals, apply type overrides, scale features."""
     df = df.copy()
     type_overrides = type_overrides or {}
 
-    # Apply type overrides BEFORE anything else:
-    # - "categorical" or "text" → convert numeric column to object so it gets label-encoded
-    # - "numeric"               → attempt to coerce object column to float
+    # 1. Apply type overrides BEFORE anything else
     for col in feature_cols:
         ov = type_overrides.get(col)
         if ov in ("categorical", "text") and pd.api.types.is_numeric_dtype(df[col]):
@@ -424,22 +425,40 @@ def preprocess_data(
         elif ov == "numeric" and not pd.api.types.is_numeric_dtype(df[col]):
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Handle missing values
+    # 2. Handle missing values — features
+    rows_to_drop = set()
     for col in feature_cols:
-        if df[col].isnull().sum() > 0:
-            if pd.api.types.is_numeric_dtype(df[col]):
+        if df[col].isnull().sum() == 0:
+            continue
+        if pd.api.types.is_numeric_dtype(df[col]):
+            if null_numeric == "median":
                 df[col].fillna(df[col].median(), inplace=True)
-            else:
-                df[col].fillna(df[col].mode()[0] if len(df[col].mode()) > 0 else "unknown", inplace=True)
+            elif null_numeric == "mean":
+                df[col].fillna(df[col].mean(), inplace=True)
+            elif null_numeric == "zero":
+                df[col].fillna(0, inplace=True)
+            elif null_numeric == "drop":
+                rows_to_drop.update(df[df[col].isnull()].index.tolist())
+        else:
+            if null_cat == "mode":
+                fill = df[col].mode()[0] if len(df[col].mode()) > 0 else "unknown"
+                df[col].fillna(fill, inplace=True)
+            elif null_cat == "unknown":
+                df[col].fillna("unknown", inplace=True)
+            elif null_cat == "drop":
+                rows_to_drop.update(df[df[col].isnull()].index.tolist())
 
-    # Handle target column nulls
+    if rows_to_drop:
+        df = df.drop(index=list(rows_to_drop)).reset_index(drop=True)
+
+    # 3. Handle target column nulls (always drop rows with null target)
     if target_col and df[target_col].isnull().sum() > 0:
         if pd.api.types.is_numeric_dtype(df[target_col]):
             df[target_col].fillna(df[target_col].median(), inplace=True)
         else:
             df[target_col].fillna(df[target_col].mode()[0] if len(df[target_col].mode()) > 0 else "unknown", inplace=True)
 
-    # Encode categorical features
+    # 4. Encode categorical features
     encoders = {}
     for col in feature_cols:
         if not pd.api.types.is_numeric_dtype(df[col]):
@@ -447,13 +466,26 @@ def preprocess_data(
             df[col] = le.fit_transform(df[col].astype(str))
             encoders[col] = le
 
-    # Encode target if categorical
+    # 5. Encode target if categorical
     target_encoder = None
     if target_col and not pd.api.types.is_numeric_dtype(df[target_col]):
         target_encoder = LabelEncoder()
         df[target_col] = target_encoder.fit_transform(df[target_col].astype(str))
 
-    return df, encoders, target_encoder
+    # 6. Feature scaling (numeric feature columns only)
+    scaler = None
+    if scaling == "standard":
+        scaler = StandardScaler()
+    elif scaling == "minmax":
+        scaler = MinMaxScaler()
+    elif scaling == "robust":
+        scaler = RobustScaler()
+
+    numeric_feature_cols = [c for c in feature_cols if pd.api.types.is_numeric_dtype(df[c])]
+    if scaler is not None and numeric_feature_cols:
+        df[numeric_feature_cols] = scaler.fit_transform(df[numeric_feature_cols])
+
+    return df, encoders, target_encoder, scaler
 
 @app.post("/train")
 async def train(request_body: Dict[str, Any]):
@@ -474,6 +506,9 @@ async def train(request_body: Dict[str, Any]):
         auto_tune_cv       = int(request_body.get("auto_tune_cv", 3))
         imbalance_strategy = request_body.get("imbalance_strategy", "none")  # none|class_weight|smote
         type_overrides     = request_body.get("type_overrides", {})           # {col: "numeric"|"categorical"|"text"}
+        preproc_null_numeric = request_body.get("preproc_null_numeric", "median")  # median|mean|zero|drop
+        preproc_null_cat     = request_body.get("preproc_null_cat", "mode")        # mode|unknown|drop
+        preproc_scaling      = request_body.get("preproc_scaling", "none")         # none|standard|minmax|robust
 
         # Validate
         if file_id not in SESSIONS:
@@ -508,10 +543,13 @@ async def train(request_body: Dict[str, Any]):
                 raise ValueError(f"Feature column '{col}' not found")
 
         # Preprocess
-        df_processed, encoders, target_encoder = preprocess_data(
+        df_processed, encoders, target_encoder, scaler = preprocess_data(
             df, feature_columns,
             target_column if task_type != "clustering" else None,
             type_overrides=type_overrides,
+            null_numeric=preproc_null_numeric,
+            null_cat=preproc_null_cat,
+            scaling=preproc_scaling,
         )
 
         # Prepare data
@@ -936,6 +974,7 @@ async def train(request_body: Dict[str, Any]):
                 "model":          model,
                 "encoders":       encoders,          # dict col->LabelEncoder
                 "target_encoder": target_encoder,    # LabelEncoder or None
+                "scaler":         scaler,            # fitted scaler or None
                 "feature_columns": feature_columns,
                 "task_type":      task_type,
                 "model_type":     model_type,
@@ -979,6 +1018,7 @@ async def predict(request_body: Dict[str, Any]):
         model          = store["model"]
         encoders       = store["encoders"]
         target_encoder = store["target_encoder"]
+        scaler         = store.get("scaler")
         feature_cols   = store["feature_columns"]
         task_type      = store["task_type"]
         is_dl          = store["is_dl"]
@@ -1005,6 +1045,10 @@ async def predict(request_body: Dict[str, Any]):
                 df_row[col] = pd.to_numeric(df_row[col], errors='coerce').fillna(0)
 
         X_row = df_row[feature_cols].values.astype(float)
+
+        # Apply same scaling as training
+        if scaler is not None:
+            X_row = scaler.transform(X_row)
 
         # Predict
         if is_dl:
