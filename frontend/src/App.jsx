@@ -275,14 +275,14 @@ function ToastContainer({ toasts, onDismiss }) {
           wordBreak: 'break-word',
         }}>
           <span style={{ color: COLOR[t.type], fontSize: 16, flexShrink: 0, marginTop: 1, textShadow: `0 0 6px ${COLOR[t.type]}` }}>
-            {t.type === 'success' ? '✓' : t.type === 'error' ? '✕' : 'ℹ'}
+            {t.type === 'success' ? <CyberIcon name="check" size={15} color={COLOR[t.type]} /> : t.type === 'error' ? <CyberIcon name="close" size={15} color={COLOR[t.type]} /> : <CyberIcon name="info" size={15} color={COLOR[t.type]} />}
           </span>
           <span style={{ flex: 1, lineHeight: 1.5 }}>{t.msg}</span>
           <button onClick={() => onDismiss(t.id)} style={{
             background: 'none', border: 'none', color: '#5565a0',
-            cursor: 'pointer', fontSize: 16, padding: '0 0 0 4px',
-            flexShrink: 0, lineHeight: 1,
-          }}>×</button>
+            cursor: 'pointer', padding: '0 0 0 4px',
+            flexShrink: 0, display: 'flex', alignItems: 'center',
+          }}><CyberIcon name="close" size={13} color="#5565a0" /></button>
         </div>
       ))}
     </div>
@@ -307,22 +307,22 @@ function CyberpunkBackground() {
     const cols = Math.floor(canvas.width / 28);
     const drops = Array(cols).fill(0).map(() => Math.random() * -80);
     let animId, last = 0;
-    const FPS = 12; // slow, ambient pace
+    const FPS = 6; // very slow, ambient pace
     const draw = (ts) => {
       animId = requestAnimationFrame(draw);
       if (ts - last < 1000 / FPS) return;
       last = ts;
-      ctx.fillStyle = 'rgba(6,6,17,0.12)';
+      ctx.fillStyle = 'rgba(6,6,17,0.20)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       drops.forEach((y, i) => {
         const bright = Math.random() > 0.96;
         ctx.fillStyle = bright ? '#c0fff5' : '#00ffd5';
         ctx.font = `12px "Share Tech Mono", monospace`;
-        ctx.globalAlpha = bright ? 0.5 : 0.1 + Math.random() * 0.08;
+        ctx.globalAlpha = bright ? 0.4 : 0.07 + Math.random() * 0.06;
         ctx.fillText(chars[Math.floor(Math.random() * chars.length)], i * 28, y * 20);
         ctx.globalAlpha = 1;
         if (y * 20 > canvas.height && Math.random() > 0.97) drops[i] = 0;
-        drops[i] += 0.4;
+        drops[i] += 0.2;
       });
     };
     animId = requestAnimationFrame(draw);
@@ -356,6 +356,74 @@ function CyberpunkCorners() {
     {corner(false, true,  false, true)}
     {corner(false, false, true,  true)}
   </>;
+}
+
+// ─────────────────────────────────────────────
+// CYBERPUNK SVG ICONS
+// ─────────────────────────────────────────────
+function CyberIcon({ name, size = 16, color = 'currentColor' }) {
+  const s = { width: size, height: size, display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 };
+  const p = { fill: 'none', xmlns: 'http://www.w3.org/2000/svg' };
+  if (name === 'upload') return (
+    <svg style={s} viewBox="0 0 16 16" {...p}>
+      <path d="M1 12v3h14v-3" stroke={color} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M8 1v9M5 4l3-3 3 3" stroke={color} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+  if (name === 'cpu') return (
+    <svg style={s} viewBox="0 0 16 16" {...p}>
+      <rect x="4" y="4" width="8" height="8" stroke={color} strokeWidth="1.2"/>
+      <path d="M4 6H1M4 10H1M12 6h3M12 10h3M6 4V1M10 4V1M6 12v3M10 12v3" stroke={color} strokeWidth="1.2" strokeLinecap="round"/>
+      <rect x="6.5" y="6.5" width="3" height="3" fill={color} fillOpacity="0.4"/>
+    </svg>
+  );
+  if (name === 'hex') return (
+    <svg style={s} viewBox="0 0 16 16" {...p}>
+      <path d="M8 1.5L13.5 4.75V11.25L8 14.5L2.5 11.25V4.75z" stroke={color} strokeWidth="1.2"/>
+      <circle cx="8" cy="8" r="2.5" stroke={color} strokeWidth="1.2"/>
+    </svg>
+  );
+  if (name === 'sliders') return (
+    <svg style={s} viewBox="0 0 16 16" {...p}>
+      <path d="M1 4h14M1 9h14M1 13h14" stroke={color} strokeWidth="1.2" strokeLinecap="round"/>
+      <circle cx="5" cy="4" r="1.8" fill={color}/>
+      <circle cx="11" cy="9" r="1.8" fill={color}/>
+      <circle cx="4" cy="13" r="1.8" fill={color}/>
+    </svg>
+  );
+  if (name === 'chart') return (
+    <svg style={s} viewBox="0 0 16 16" {...p}>
+      <path d="M1 14.5h14" stroke={color} strokeWidth="1.2" strokeLinecap="round"/>
+      <rect x="2" y="9" width="3" height="5.5" stroke={color} strokeWidth="1.2"/>
+      <rect x="6.5" y="5" width="3" height="9.5" stroke={color} strokeWidth="1.2"/>
+      <rect x="11" y="2" width="3" height="12.5" stroke={color} strokeWidth="1.2"/>
+    </svg>
+  );
+  if (name === 'warn') return (
+    <svg style={s} viewBox="0 0 16 16" {...p}>
+      <path d="M8 2L14.5 14H1.5z" stroke={color} strokeWidth="1.2" strokeLinejoin="round"/>
+      <path d="M8 7v3" stroke={color} strokeWidth="1.2" strokeLinecap="round"/>
+      <circle cx="8" cy="11.5" r="0.7" fill={color}/>
+    </svg>
+  );
+  if (name === 'close') return (
+    <svg style={s} viewBox="0 0 16 16" {...p}>
+      <path d="M3 3l10 10M13 3L3 13" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  );
+  if (name === 'check') return (
+    <svg style={s} viewBox="0 0 16 16" {...p}>
+      <path d="M2 8l4 4 8-8" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+  if (name === 'info') return (
+    <svg style={s} viewBox="0 0 16 16" {...p}>
+      <circle cx="8" cy="8" r="6.5" stroke={color} strokeWidth="1.2"/>
+      <path d="M8 7v4" stroke={color} strokeWidth="1.2" strokeLinecap="round"/>
+      <circle cx="8" cy="5" r="0.7" fill={color}/>
+    </svg>
+  );
+  return null;
 }
 
 // ─────────────────────────────────────────────
@@ -601,7 +669,9 @@ function StepImport({ state, dispatch }) {
           boxShadow: dragging ? '0 0 24px rgba(0,255,213,0.2), inset 0 0 24px rgba(0,255,213,0.05)' : 'none',
         }}
       >
-        <span style={{ fontSize: 44, filter: dragging ? 'drop-shadow(0 0 8px #00ffd5)' : 'none', transition: t.trans }}>📂</span>
+        <span style={{ color: dragging ? '#00ffd5' : '#5565a0', filter: dragging ? 'drop-shadow(0 0 8px #00ffd5)' : 'none', transition: t.trans }}>
+          <CyberIcon name="upload" size={44} color={dragging ? '#00ffd5' : '#5565a0'} />
+        </span>
         <div>
           <p style={{ color: t.text, fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
             Drag & drop your file here
@@ -654,7 +724,7 @@ function StepImport({ state, dispatch }) {
           {/* File summary */}
           <Card dark={dark}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <span style={{ fontSize: 32 }}>📊</span>
+              <span style={{ color: '#00ffd5', filter: 'drop-shadow(0 0 6px #00ffd5)' }}><CyberIcon name="chart" size={32} color="#00ffd5" /></span>
               <div style={{ flex: 1 }}>
                 <p style={{ fontWeight: 700, fontSize: 16, color: t.text }}>{data.fileName}</p>
                 <p style={{ color: t.muted, fontSize: 13, marginTop: 2 }}>
@@ -1470,7 +1540,7 @@ function StepResults({ state, dispatch }) {
   if (!current) {
     return (
       <div style={{ textAlign: 'center', padding: 60, color: t.muted }}>
-        <p style={{ fontSize: 48, marginBottom: 16 }}>📊</p>
+        <div style={{ marginBottom: 16, color: '#5565a0' }}><CyberIcon name="chart" size={48} color="#5565a0" /></div>
         <p style={{ fontSize: 16 }}>No results yet. Complete training to see results.</p>
       </div>
     );
@@ -1511,14 +1581,22 @@ function StepResults({ state, dispatch }) {
     toast('Results saved!', 'success');
   };
 
-  const exportReport = () => {
+  const exportReport = () => { try {
     const m   = current.metrics || {};
-    const fi  = current.feature_importances || [];
-    const avp = current.actual_vs_predicted || [];
-    const res = current.residuals || [];
+    // Normalize — backend may return dicts instead of arrays
+    const fiRaw = current.feature_importances;
+    const fi  = Array.isArray(fiRaw) ? fiRaw
+              : (fiRaw && typeof fiRaw === 'object')
+                ? Object.entries(fiRaw).map(([feature, importance]) => ({ feature, importance }))
+                : [];
+    const avpRaw = current.actual_vs_predicted;
+    const avp = Array.isArray(avpRaw) ? avpRaw : [];
+    const res = Array.isArray(current.residuals) ? current.residuals : [];
     const cm  = current.confusion_matrix || null;
-    const roc = current.roc_curve || [];
-    const pca = current.pca_2d || [];
+    const rocRaw = current.roc_curve;
+    const roc = Array.isArray(rocRaw) ? rocRaw : [];
+    const pcaRaw = current.pca_2d;
+    const pca = Array.isArray(pcaRaw) ? pcaRaw : [];
 
     const fiRows = fi.slice(0, 20).map(({feature, importance}) =>
       `<tr><td>${feature}</td><td>${typeof importance === 'number' ? importance.toFixed(6) : importance}</td></tr>`).join('');
@@ -1633,7 +1711,8 @@ ${pca.length > 0 ? `<div class="card">
 
 </body></html>`;
 
-    const blob = new Blob([html], { type: 'text/html' });
+    // Use octet-stream so browser always downloads rather than rendering the HTML
+    const blob = new Blob([html], { type: 'application/octet-stream' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url;
@@ -1642,9 +1721,121 @@ ${pca.length > 0 ? `<div class="card">
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
     toast('Report exported!', 'success');
-  };
+  } catch(err) { toast('Export failed: ' + err.message, 'error'); } };
+
+  const exportComparison = () => { try {
+    if (comp.length < 2) { toast('Add at least 2 models to compare first', 'error'); return; }
+
+    // Helper — normalize feature_importances whether it's an array or a dict
+    const normFI = (v) => Array.isArray(v) ? v
+      : (v && typeof v === 'object')
+        ? Object.entries(v).map(([feature, importance]) => ({ feature, importance }))
+        : [];
+
+    // All metric keys across every compared model
+    const allMetricKeys = [...new Set(comp.flatMap(c => Object.keys(c.metrics || {})))];
+
+    // Side-by-side metrics table rows
+    const metricRows = allMetricKeys.map(k => {
+      const vals    = comp.map(c => c.metrics?.[k] ?? null);
+      const numVals = vals.filter(v => v != null && !isNaN(v));
+      const hiB     = METRIC_INFO[k]?.higher_better ?? true;
+      const best    = numVals.length ? (hiB ? Math.max(...numVals) : Math.min(...numVals)) : null;
+      const cells   = vals.map(v => {
+        const isBest = v != null && v === best;
+        const fmt    = v != null ? (typeof v === 'number' ? v.toFixed(4) : v) : '—';
+        return `<td style="text-align:center;${isBest ? 'color:#00ffd5;font-weight:700;background:#00ffd510' : ''}">${fmt}</td>`;
+      }).join('');
+      return `<tr><td style="font-weight:600">${METRIC_INFO[k]?.label || k.toUpperCase()}</td>${cells}</tr>`;
+    }).join('');
+
+    // Per-model appendix sections
+    const modelCards = comp.map((c, idx) => {
+      const fi  = normFI(c.feature_importances);
+      const avp = Array.isArray(c.actual_vs_predicted) ? c.actual_vs_predicted : [];
+      const res = Array.isArray(c.residuals) ? c.residuals : [];
+      const cm  = c.confusion_matrix || null;
+
+      const fiRows  = fi.slice(0,20).map(({feature,importance}) =>
+        `<tr><td>${feature}</td><td>${typeof importance==='number'?importance.toFixed(6):importance}</td></tr>`).join('');
+      const avpRows = avp.slice(0,30).map(({actual,predicted}) =>
+        `<tr><td>${typeof actual==='number'?actual.toFixed(4):actual}</td><td>${typeof predicted==='number'?predicted.toFixed(4):predicted}</td></tr>`).join('');
+      const resRows = res.slice(0,30).map((v,i) =>
+        `<tr><td>${i+1}</td><td>${typeof v==='number'?v.toFixed(6):v}</td></tr>`).join('');
+      const cmHtml  = cm ? `<h4 style="margin:16px 0 8px">Confusion Matrix</h4>
+        <table style="width:auto">${cm.map(row=>`<tr>${row.map(v=>`<td style="text-align:center;min-width:40px;font-weight:700;padding:6px">${v}</td>`).join('')}</tr>`).join('')}</table>` : '';
+
+      return `<div class="card">
+  <h3 style="color:#00ffd5;margin-bottom:4px">Model ${idx+1}: ${c.modelName}</h3>
+  <p style="color:#888;font-size:12px;margin-bottom:16px">
+    Trained ${new Date(c.timestamp).toLocaleString()}
+    ${c.training_time != null ? ' · ' + Number(c.training_time).toFixed(2) + 's' : ''}
+  </p>
+  <h4 style="margin-bottom:8px">Parameters</h4>
+  <table style="width:auto;margin-bottom:16px">
+    <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+    <tbody>${Object.entries(c.params||{}).map(([k,v])=>`<tr><td>${k}</td><td><b>${v}</b></td></tr>`).join('')}</tbody>
+  </table>
+  ${fi.length>0 ? `<h4 style="margin-bottom:8px">Feature Importances (top 20)</h4>
+  <table><thead><tr><th>Feature</th><th>Importance</th></tr></thead><tbody>${fiRows}</tbody></table>` : ''}
+  ${avp.length>0 ? `<h4 style="margin:16px 0 8px">Actual vs Predicted (first 30)</h4>
+  <table><thead><tr><th>Actual</th><th>Predicted</th></tr></thead><tbody>${avpRows}</tbody></table>` : ''}
+  ${res.length>0 ? `<h4 style="margin:16px 0 8px">Residuals (first 30)</h4>
+  <table><thead><tr><th>#</th><th>Residual</th></tr></thead><tbody>${resRows}</tbody></table>` : ''}
+  ${cmHtml}
+</div>`;
+    }).join('');
+
+    const modelHeaders = comp.map((c,i) => `<th style="text-align:center;color:#00ffd5;padding:10px 14px">${c.modelName}</th>`).join('');
+
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
+<title>HappyModel — Comparison Report</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,sans-serif;background:#0a0a14;color:#c0c8ff;padding:32px;line-height:1.6}
+  h1{font-size:26px;color:#00ffd5;margin-bottom:4px;letter-spacing:1px}
+  h2{font-size:18px;color:#c0c8ff;margin:28px 0 12px}
+  h3{font-size:15px;color:#a0aec0;margin:20px 0 8px}
+  h4{font-size:13px;color:#a0aec0}
+  .subtitle{color:#5565a0;font-size:13px;margin-bottom:28px}
+  .card{background:#10101e;border:1px solid #1a1a3e;border-radius:6px;padding:24px;margin-bottom:20px}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+  th{background:#0d0d1e;padding:9px 12px;text-align:left;color:#5565a0;border-bottom:1px solid #1a1a3e;font-weight:600}
+  td{padding:8px 12px;border-bottom:1px solid #1a1a3e20}
+  tr:hover td{background:#ffffff05}
+  .best{color:#00ffd5;font-weight:700}
+  @media print{.card{break-inside:avoid}}
+</style></head><body>
+<h1>HappyModel — Model Comparison Report</h1>
+<p class="subtitle">Dataset: <strong>${data.fileName||'—'}</strong> · Generated ${new Date().toLocaleString()} · ${comp.length} models compared</p>
+
+<div class="card">
+  <h2>Side-by-Side Metrics</h2>
+  <table>
+    <thead><tr><th>Metric</th>${modelHeaders}</tr></thead>
+    <tbody>${metricRows}</tbody>
+  </table>
+  <p style="font-size:11px;color:#5565a0;margin-top:10px">★ Highlighted value = best result for that metric</p>
+</div>
+
+<h2>Per-Model Details &amp; Appendix</h2>
+${modelCards}
+</body></html>`;
+
+    const blob = new Blob([html], { type: 'application/octet-stream' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `happymodel_comparison_${Date.now()}.html`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    toast('Comparison report exported!', 'success');
+  } catch(err) { toast('Export failed: ' + err.message, 'error'); } };
 
   const actual_vs_predicted = current.actual_vs_predicted || [];
   const residuals            = current.residuals || [];
@@ -1789,12 +1980,15 @@ ${pca.length > 0 ? `<div class="card">
       {/* Model comparison panel */}
       {comp.length >= 2 && (
         <Card dark={dark}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, color: t.text }}>Model Comparison</h3>
-            <Button dark={dark} size="sm" variant="ghost"
-              onClick={() => dispatch({ type: 'SET_RESULTS', payload: { comparison: [] } })}>
-              Clear Comparison
-            </Button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button dark={dark} size="sm" onClick={exportComparison}>Export Comparison</Button>
+              <Button dark={dark} size="sm" variant="ghost"
+                onClick={() => dispatch({ type: 'SET_RESULTS', payload: { comparison: [] } })}>
+                Clear
+              </Button>
+            </div>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -1902,7 +2096,7 @@ function Navbar({ state, dispatch }) {
                   boxShadow: current ? '0 0 8px #00ffd5, 0 0 16px rgba(0,255,213,0.3)' : 'none',
                   fontFamily: 'Share Tech Mono, monospace',
                 }}>
-                  {done ? '✓' : step}
+                  {done ? <CyberIcon name="check" size={13} color="#00ffd5" /> : step}
                 </div>
                 <span style={{ fontSize: 9, color: current ? '#00ffd5' : t.muted, fontWeight: current ? 700 : 400, whiteSpace: 'nowrap', fontFamily: 'Share Tech Mono, monospace', letterSpacing: 0.5, textShadow: current ? '0 0 6px #00ffd5' : 'none' }}>
                   {label.toUpperCase()}
@@ -1932,7 +2126,13 @@ function Navbar({ state, dispatch }) {
 // SIDEBAR
 // ─────────────────────────────────────────────
 const STEP_LABELS = ['Import Data', 'Select Model', 'Configure Features', 'Set Parameters', 'Results'];
-const STEP_ICONS  = ['📂', '🤖', '⚙️', '🎛️', '📊'];
+const STEP_ICONS  = [
+  <CyberIcon name="upload"  size={14} />,
+  <CyberIcon name="cpu"     size={14} />,
+  <CyberIcon name="hex"     size={14} />,
+  <CyberIcon name="sliders" size={14} />,
+  <CyberIcon name="chart"   size={14} />,
+];
 
 function Sidebar({ state, dispatch }) {
   const { ui } = state;
@@ -1977,7 +2177,7 @@ function Sidebar({ state, dispatch }) {
                 textShadow: current ? '0 0 6px #00ffd5' : done ? '0 0 4px #39ff14' : 'none',
                 fontFamily: 'Share Tech Mono, monospace',
               }}>
-                {done ? '✓' : STEP_ICONS[i]}
+                {done ? <CyberIcon name="check" size={13} color="#39ff14" /> : STEP_ICONS[i]}
               </span>
               {ui.sidebarOpen && (
                 <span style={{
@@ -2087,7 +2287,7 @@ function AppInner() {
           background: '#ef444415', borderBottom: '1px solid #ef444433',
           padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <span style={{ fontSize: 16 }}>⚠️</span>
+          <CyberIcon name="warn" size={16} color="#ef4444" />
           <span style={{ fontSize: 13, color: '#ef4444', fontWeight: 500 }}>
             Backend not running. Start it with:&nbsp;
             <code style={{ fontFamily: 'DM Mono, monospace', background: '#ef444420', padding: '2px 6px', borderRadius: 4 }}>
@@ -2105,7 +2305,7 @@ function AppInner() {
         }}>
           <span style={{ fontSize: 13, color: '#ef4444' }}>Error: {ui.error}</span>
           <button onClick={() => dispatch({ type: 'SET_UI', payload: { error: null } })}
-            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 18 }}>✕</button>
+            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0, display: 'flex' }}><CyberIcon name="close" size={16} color="#ef4444" /></button>
         </div>
       )}
 
