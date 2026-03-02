@@ -16,7 +16,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sklearn.model_selection import (
     train_test_split, cross_val_score, KFold, StratifiedKFold,
-    TimeSeriesSplit, learning_curve as sk_learning_curve
+    TimeSeriesSplit, learning_curve as sk_learning_curve, GridSearchCV
 )
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import (
@@ -55,6 +55,12 @@ try:
 except ImportError:
     TENSORFLOW_AVAILABLE = False
 
+try:
+    from imblearn.over_sampling import SMOTE
+    SMOTE_AVAILABLE = True
+except ImportError:
+    SMOTE_AVAILABLE = False
+
 # ============================================================================
 # FastAPI Setup
 # ============================================================================
@@ -72,6 +78,9 @@ app.add_middleware(
 
 # Session storage (in-memory)
 SESSIONS: Dict[str, pd.DataFrame] = {}
+
+# Model store: keyed by predict_id, holds model + preprocessing state
+MODEL_STORE: Dict[str, Dict[str, Any]] = {}
 
 # ============================================================================
 # Health Check
@@ -122,13 +131,19 @@ async def upload(file: UploadFile = File(...)):
         # Column information
         columns = []
         for col in df.columns:
-            columns.append({
+            unique_count = int(df[col].nunique())
+            entry = {
                 "name": col,
                 "dtype": str(df[col].dtype),
                 "null_count": int(df[col].isnull().sum()),
-                "unique_count": int(df[col].nunique()),
-                "sample_values": df[col].dropna().head(5).tolist()
-            })
+                "unique_count": unique_count,
+                "sample_values": df[col].dropna().head(5).tolist(),
+            }
+            # Include value counts for low-cardinality columns (useful for class dist)
+            if unique_count <= 30:
+                vc = df[col].value_counts()
+                entry["value_counts"] = {str(k): int(v) for k, v in vc.head(30).items()}
+            columns.append(entry)
 
         # Infer column types
         inferred_types = {}
@@ -173,6 +188,25 @@ async def upload(file: UploadFile = File(...)):
             status_code=400,
             detail=f"File upload error: {str(e)}"
         )
+
+# ============================================================================
+# Auto-tune Param Grids (GridSearchCV)
+# ============================================================================
+
+PARAM_GRIDS: Dict[str, Dict[str, list]] = {
+    "ridge":                        {"alpha": [0.01, 0.1, 1.0, 10.0, 100.0]},
+    "lasso":                        {"alpha": [0.001, 0.01, 0.1, 1.0, 10.0]},
+    "svr":                          {"C": [0.1, 1.0, 10.0], "kernel": ["rbf", "linear"]},
+    "random_forest_regressor":      {"n_estimators": [50, 100, 200], "max_depth": [None, 5, 10]},
+    "gradient_boosting_regressor":  {"n_estimators": [50, 100], "learning_rate": [0.05, 0.1, 0.2], "max_depth": [3, 5]},
+    "xgboost_regressor":            {"n_estimators": [50, 100], "learning_rate": [0.05, 0.1, 0.2], "max_depth": [3, 5]},
+    "logistic_regression":          {"C": [0.01, 0.1, 1.0, 10.0]},
+    "random_forest_classifier":     {"n_estimators": [50, 100, 200], "max_depth": [None, 5, 10]},
+    "gradient_boosting_classifier": {"n_estimators": [50, 100], "learning_rate": [0.05, 0.1, 0.2], "max_depth": [3, 5]},
+    "xgboost_classifier":           {"n_estimators": [50, 100], "learning_rate": [0.05, 0.1, 0.2], "max_depth": [3, 5]},
+    "svm_classifier":               {"C": [0.1, 1.0, 10.0], "kernel": ["rbf", "linear"]},
+    "knn":                          {"n_neighbors": [3, 5, 7, 11, 15]},
+}
 
 # ============================================================================
 # Model Training
@@ -225,13 +259,15 @@ def get_model(model_type: str, params: Dict[str, Any], task_type: str, n_feature
         return LogisticRegression(
             C=params.get("C", 1.0),
             max_iter=params.get("max_iter", 1000),
-            solver=params.get("solver", "lbfgs")
+            solver=params.get("solver", "lbfgs"),
+            class_weight=params.get("class_weight", None),
         )
     elif model_type == "random_forest_classifier":
         return RandomForestClassifier(
             n_estimators=params.get("n_estimators", 100),
             max_depth=params.get("max_depth", None),
             min_samples_split=params.get("min_samples_split", 2),
+            class_weight=params.get("class_weight", None),
             random_state=42
         )
     elif model_type == "xgboost_classifier":
@@ -252,7 +288,8 @@ def get_model(model_type: str, params: Dict[str, Any], task_type: str, n_feature
             C=params.get("C", 1.0),
             kernel=params.get("kernel", "rbf"),
             gamma=params.get("gamma", "scale"),
-            probability=True
+            probability=True,
+            class_weight=params.get("class_weight", None),
         )
     elif model_type == "knn":
         return KNeighborsClassifier(n_neighbors=params.get("n_neighbors", 5))
@@ -367,9 +404,25 @@ def _build_dl_model(model_type: str, params: dict, task_type: str, n_features: i
     model._hm_keras = True
     return model
 
-def preprocess_data(df: pd.DataFrame, feature_cols: List[str], target_col: Optional[str] = None):
-    """Preprocess data: handle nulls, encode categoricals, etc."""
+def preprocess_data(
+    df: pd.DataFrame,
+    feature_cols: List[str],
+    target_col: Optional[str] = None,
+    type_overrides: Optional[Dict[str, str]] = None,
+):
+    """Preprocess data: handle nulls, encode categoricals, apply type overrides."""
     df = df.copy()
+    type_overrides = type_overrides or {}
+
+    # Apply type overrides BEFORE anything else:
+    # - "categorical" or "text" → convert numeric column to object so it gets label-encoded
+    # - "numeric"               → attempt to coerce object column to float
+    for col in feature_cols:
+        ov = type_overrides.get(col)
+        if ov in ("categorical", "text") and pd.api.types.is_numeric_dtype(df[col]):
+            df[col] = df[col].astype(str)
+        elif ov == "numeric" and not pd.api.types.is_numeric_dtype(df[col]):
+            df[col] = pd.to_numeric(df[col], errors="coerce")
 
     # Handle missing values
     for col in feature_cols:
@@ -417,6 +470,10 @@ async def train(request_body: Dict[str, Any]):
         val_size = request_body.get("val_size", 0.0)      # 0 = no explicit val set
         cv_folds = request_body.get("cv_folds", None)
         bootstrap = request_body.get("bootstrap", False)
+        auto_tune          = request_body.get("auto_tune", False)
+        auto_tune_cv       = int(request_body.get("auto_tune_cv", 3))
+        imbalance_strategy = request_body.get("imbalance_strategy", "none")  # none|class_weight|smote
+        type_overrides     = request_body.get("type_overrides", {})           # {col: "numeric"|"categorical"|"text"}
 
         # Validate
         if file_id not in SESSIONS:
@@ -451,7 +508,11 @@ async def train(request_body: Dict[str, Any]):
                 raise ValueError(f"Feature column '{col}' not found")
 
         # Preprocess
-        df_processed, encoders, target_encoder = preprocess_data(df, feature_columns, target_column if task_type != "clustering" else None)
+        df_processed, encoders, target_encoder = preprocess_data(
+            df, feature_columns,
+            target_column if task_type != "clustering" else None,
+            type_overrides=type_overrides,
+        )
 
         # Prepare data
         X = df_processed[feature_columns].values
@@ -509,8 +570,60 @@ async def train(request_body: Dict[str, Any]):
                 X_train, y_train = X_tv, y_tv
                 X_val,  y_val    = X_test, y_test   # fall back to test for val display
 
+            # ── Class imbalance handling ──────────────────────────────────────
+            class_dist_raw = {}
+            imbalance_ratio = None
+            if task_type == "classification":
+                unique_cls, counts = np.unique(y_train, return_counts=True)
+                class_dist_raw = {int(c): int(n) for c, n in zip(unique_cls, counts)}
+                if len(counts) >= 2:
+                    imbalance_ratio = round(float(counts.max() / counts.min()), 2)
+
+                if imbalance_strategy == "class_weight":
+                    # inject into params; get_model will pass it to supported models
+                    params["class_weight"] = "balanced"
+                elif imbalance_strategy == "smote" and SMOTE_AVAILABLE and len(unique_cls) >= 2:
+                    try:
+                        sm = SMOTE(random_state=42)
+                        X_train, y_train = sm.fit_resample(X_train, y_train)
+                    except Exception:
+                        pass   # fall back silently if SMOTE fails
+
             # Get and train model
             n_features = X_train.shape[1]
+            is_dl_type = model_type in ("mlp", "lstm", "cnn_1d", "autoencoder")
+
+            # ── Auto-tune with GridSearchCV ───────────────────────────────────
+            auto_tune_result = {}
+            if auto_tune and not is_dl_type and PARAM_GRIDS.get(model_type):
+                grid = PARAM_GRIDS[model_type]
+                scoring = "r2" if task_type == "regression" else "f1_weighted"
+                base_model = get_model(model_type, {}, task_type, n_features=n_features)
+                try:
+                    tune_start = time.time()
+                    cv_split = (
+                        StratifiedKFold(n_splits=auto_tune_cv, shuffle=True, random_state=42)
+                        if task_type == "classification" else auto_tune_cv
+                    )
+                    gs = GridSearchCV(
+                        base_model, grid,
+                        cv=cv_split, scoring=scoring,
+                        n_jobs=-1, refit=False,
+                    )
+                    gs.fit(X_train, y_train)
+                    best_params  = gs.best_params_
+                    params.update(best_params)   # override with tuned values
+                    auto_tune_result = {
+                        "best_params":   best_params,
+                        "best_cv_score": round(float(gs.best_score_), 4),
+                        "tuning_time":   round(time.time() - tune_start, 2),
+                        "n_candidates":  len(gs.cv_results_["params"]),
+                        "cv_folds":      auto_tune_cv,
+                        "scoring":       scoring,
+                    }
+                except Exception as e:
+                    auto_tune_result = {"error": str(e)}
+
             model = get_model(model_type, params, task_type, n_features=n_features)
 
             # Check if it's a deep learning model
@@ -808,6 +921,39 @@ async def train(request_body: Dict[str, Any]):
                 except Exception:
                     pass  # Bootstrap is optional
 
+            # ── Store model for /predict ──────────────────────────────────────
+            predict_id = str(uuid.uuid4())
+            # Compute per-feature stats (min/max/mean from training data)
+            feature_stats = {}
+            for i, col in enumerate(feature_columns):
+                col_vals = X_train[:, i]
+                feature_stats[col] = {
+                    "min":  round(float(np.nanmin(col_vals)), 6),
+                    "max":  round(float(np.nanmax(col_vals)), 6),
+                    "mean": round(float(np.nanmean(col_vals)), 6),
+                }
+            MODEL_STORE[predict_id] = {
+                "model":          model,
+                "encoders":       encoders,          # dict col->LabelEncoder
+                "target_encoder": target_encoder,    # LabelEncoder or None
+                "feature_columns": feature_columns,
+                "task_type":      task_type,
+                "model_type":     model_type,
+                "is_dl":          is_dl,
+                "feature_stats":  feature_stats,
+                "col_types":      {
+                    col: ("numeric" if pd.api.types.is_numeric_dtype(df_processed[col]) else "categorical")
+                    for col in feature_columns
+                },
+            }
+            result["predict_id"]     = predict_id
+            result["feature_stats"]  = feature_stats
+            if auto_tune_result:
+                result["auto_tune"] = auto_tune_result
+            if class_dist_raw:
+                result["class_distribution"] = class_dist_raw
+                result["imbalance_ratio"]     = imbalance_ratio
+
             return result
 
     except Exception as e:
@@ -815,6 +961,102 @@ async def train(request_body: Dict[str, Any]):
             status_code=400,
             detail=f"Training error: {str(e)}\n{traceback.format_exc()}"
         )
+
+@app.post("/predict")
+async def predict(request_body: Dict[str, Any]):
+    """
+    Run inference on one row of user-supplied feature values,
+    using the stored model/encoders from the most-recent /train call.
+    """
+    try:
+        predict_id = request_body.get("predict_id")
+        inputs     = request_body.get("inputs", {})   # {col: raw_value}
+
+        if predict_id not in MODEL_STORE:
+            raise ValueError("No trained model found. Please train first.")
+
+        store          = MODEL_STORE[predict_id]
+        model          = store["model"]
+        encoders       = store["encoders"]
+        target_encoder = store["target_encoder"]
+        feature_cols   = store["feature_columns"]
+        task_type      = store["task_type"]
+        is_dl          = store["is_dl"]
+        model_type     = store["model_type"]
+
+        # Build single-row dataframe
+        row = {}
+        for col in feature_cols:
+            val = inputs.get(col, 0)
+            row[col] = [val]
+        df_row = pd.DataFrame(row)
+
+        # Apply same encoding as training
+        for col in feature_cols:
+            if col in encoders:
+                le = encoders[col]
+                # Handle unseen categories gracefully
+                val_str = str(df_row[col].iloc[0])
+                if val_str in le.classes_:
+                    df_row[col] = le.transform(df_row[col].astype(str))
+                else:
+                    df_row[col] = 0   # unknown → 0
+            else:
+                df_row[col] = pd.to_numeric(df_row[col], errors='coerce').fillna(0)
+
+        X_row = df_row[feature_cols].values.astype(float)
+
+        # Predict
+        if is_dl:
+            if model_type in ("lstm", "cnn_1d"):
+                X_row = X_row.reshape((1, 1, X_row.shape[1]))
+            raw = model.predict(X_row, verbose=0).flatten()
+        else:
+            raw = model.predict(X_row)
+
+        # Format output
+        if task_type == "regression":
+            prediction = float(raw[0])
+            response = {"prediction": prediction, "task_type": "regression"}
+        elif task_type == "classification":
+            if is_dl:
+                prob = float(raw[0])
+                pred_class_idx = int(prob > 0.5)
+                confidence = prob if pred_class_idx == 1 else 1 - prob
+            else:
+                pred_class_idx = int(raw[0])
+                confidence = None
+                try:
+                    proba = model.predict_proba(X_row.reshape(1, -1) if not is_dl else X_row)[0]
+                    confidence = float(np.max(proba))
+                except Exception:
+                    confidence = None
+
+            # Decode label if target was encoded
+            if target_encoder is not None:
+                try:
+                    pred_label = str(target_encoder.inverse_transform([pred_class_idx])[0])
+                except Exception:
+                    pred_label = str(pred_class_idx)
+            else:
+                pred_label = str(pred_class_idx)
+
+            response = {
+                "prediction": pred_label,
+                "confidence": round(confidence, 4) if confidence is not None else None,
+                "task_type":  "classification",
+            }
+        else:
+            response = {"prediction": str(raw[0]), "task_type": task_type}
+
+        return response
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Prediction error: {str(e)}\n{traceback.format_exc()}"
+        )
+
 
 @app.post("/compare")
 async def compare(request_body: List[Dict[str, Any]]):
